@@ -1,0 +1,1 @@
+- [Telegram bot webhook architecture](telegram-bot-webhook.md) — Replit blocks Telegram polling; must use webhook via Node.js proxy to Python bot.
