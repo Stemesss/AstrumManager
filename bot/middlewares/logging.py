@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 from typing import Any, Awaitable, Callable
 
@@ -8,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 
 class LoggingMiddleware(BaseMiddleware):
+    """Промежуточный слой для логирования входящих обновлений от пользователей."""
+
     async def __call__(
         self,
         handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
@@ -23,9 +26,9 @@ class LoggingMiddleware(BaseMiddleware):
 
             if user:
                 logger.info(
-                    "Update from user %s (@%s): %s",
+                    "Обновление от пользователя %s (@%s): %s",
                     user.id,
-                    user.username or "no_username",
+                    user.username or "нет_username",
                     event.event_type,
                 )
 

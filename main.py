@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 import logging
 import os
@@ -26,18 +27,18 @@ def setup_logging() -> None:
 
 
 def resolve_public_host() -> str | None:
-    """Return the public hostname for webhook registration, or None for polling."""
-    # Explicit override always wins
+    """Возвращает публичный хост для регистрации вебхука или None для режима polling."""
+    # Явное переопределение через переменную окружения имеет наивысший приоритет
     override = os.getenv("WEBHOOK_BASE_URL", "").strip()
     if override:
         return override.rstrip("/")
 
-    # Replit: REPLIT_DOMAINS is a comma-separated list
+    # Replit: REPLIT_DOMAINS — список доменов через запятую
     replit = os.getenv("REPLIT_DOMAINS", "").split(",")[0].strip()
     if replit:
         return f"https://{replit}"
 
-    # Railway: RAILWAY_PUBLIC_DOMAIN is just the hostname
+    # Railway: RAILWAY_PUBLIC_DOMAIN — публичный домен сервиса
     railway = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
     if railway:
         return f"https://{railway}"
@@ -47,14 +48,14 @@ def resolve_public_host() -> str | None:
 
 async def on_startup(bot: Bot, webhook_url: str, **_kwargs) -> None:
     logger = logging.getLogger(__name__)
-    logger.info("Setting webhook → %s", webhook_url)
+    logger.info("Регистрация вебхука → %s", webhook_url)
     await bot.set_webhook(webhook_url, drop_pending_updates=True)
-    logger.info("Webhook registered")
+    logger.info("Вебхук успешно зарегистрирован")
 
 
 async def on_shutdown(bot: Bot, **_kwargs) -> None:
     await bot.delete_webhook()
-    logging.getLogger(__name__).info("Webhook removed")
+    logging.getLogger(__name__).info("Вебхук удалён")
 
 
 def build_dispatcher(bot: Bot) -> Dispatcher:
@@ -68,7 +69,7 @@ def build_dispatcher(bot: Bot) -> Dispatcher:
 async def run_polling(bot: Bot, dp: Dispatcher) -> None:
     logger = logging.getLogger(__name__)
     me = await bot.get_me()
-    logger.info("Polling mode — @%s (id=%s)", me.username, me.id)
+    logger.info("Режим polling — @%s (id=%s)", me.username, me.id)
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
@@ -76,7 +77,7 @@ def run_webhook(bot: Bot, dp: Dispatcher, public_host: str) -> None:
     logger = logging.getLogger(__name__)
     webhook_url = f"{public_host}{WEBHOOK_PATH}"
 
-    # On Railway use $PORT; on Replit use 6000 (behind the Node proxy).
+    # На Railway используется $PORT; на Replit — порт 6000 (за Node-прокси)
     port = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", "6000")))
 
     dp.startup.register(partial(on_startup, bot=bot, webhook_url=webhook_url))
@@ -86,7 +87,7 @@ def run_webhook(bot: Bot, dp: Dispatcher, public_host: str) -> None:
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
 
-    logger.info("Webhook mode — listening on 0.0.0.0:%d, path %s", port, WEBHOOK_PATH)
+    logger.info("Запуск вебхук-сервера на 0.0.0.0:%d, путь %s", port, WEBHOOK_PATH)
     web.run_app(app, host="0.0.0.0", port=port)
 
 
@@ -106,7 +107,7 @@ def main() -> None:
         run_webhook(bot, dp, public_host)
     else:
         logging.getLogger(__name__).info(
-            "No public host found — falling back to polling (local dev mode)"
+            "Публичный хост не найден — запуск в режиме polling (локальная разработка)"
         )
         asyncio.run(run_polling(bot, dp))
 

@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+"""
+Вебхук-сервер на aiohttp (устаревший модуль — точка входа перенесена в main.py).
+Оставлен для совместимости. Используйте main.py для запуска бота.
+"""
 import logging
 import os
 import sys
@@ -28,14 +33,14 @@ def setup_logging() -> None:
 async def on_startup(bot: Bot, base_url: str, **kwargs) -> None:
     webhook_url = f"https://{base_url}{WEBHOOK_PATH}"
     logger = logging.getLogger(__name__)
-    logger.info("Setting webhook to %s", webhook_url)
+    logger.info("Регистрация вебхука: %s", webhook_url)
     await bot.set_webhook(webhook_url, drop_pending_updates=True)
-    logger.info("Webhook set successfully")
+    logger.info("Вебхук успешно зарегистрирован")
 
 
 async def on_shutdown(bot: Bot, **kwargs) -> None:
     await bot.delete_webhook()
-    logging.getLogger(__name__).info("Webhook deleted")
+    logging.getLogger(__name__).info("Вебхук удалён")
 
 
 def main() -> None:
@@ -44,10 +49,11 @@ def main() -> None:
 
     config = load_config()
 
+    # Получаем публичный домен из переменной окружения Replit
     replit_domains = os.getenv("REPLIT_DOMAINS", "")
     base_url = replit_domains.split(",")[0].strip()
     if not base_url:
-        logger.error("REPLIT_DOMAINS is not set — cannot determine webhook URL")
+        logger.error("REPLIT_DOMAINS не задан — невозможно определить URL вебхука")
         sys.exit(1)
 
     port = int(os.getenv("WEBHOOK_PORT", "6000"))
@@ -69,7 +75,7 @@ def main() -> None:
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
 
-    logger.info("Starting webhook server on port %d", port)
+    logger.info("Запуск вебхук-сервера на порту %d", port)
     web.run_app(app, host=WEBAPP_HOST, port=port)
 
 

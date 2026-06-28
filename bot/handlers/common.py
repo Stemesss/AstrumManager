@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+"""Обработчики основных команд: /start, /help, /about."""
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
@@ -8,6 +9,7 @@ router = Router()
 
 @router.message(CommandStart())
 async def handle_start(message: Message) -> None:
+    """Приветственное сообщение при первом запуске или команде /start."""
     user = message.from_user
     name = user.full_name if user else "пользователь"
     await message.answer(
@@ -24,6 +26,7 @@ async def handle_start(message: Message) -> None:
 
 @router.message(Command("help"))
 async def handle_help(message: Message) -> None:
+    """Показывает список доступных команд."""
     await message.answer(
         "📖 <b>Доступные команды</b>\n\n"
         "/start — приветственное сообщение\n"
@@ -36,6 +39,7 @@ async def handle_help(message: Message) -> None:
 
 @router.message(Command("about"))
 async def handle_about(message: Message) -> None:
+    """Информация о боте и используемых технологиях."""
     await message.answer(
         "🤖 <b>О боте</b>\n\n"
         "Создан на базе <b>aiogram 3</b> — современного полностью асинхронного "
