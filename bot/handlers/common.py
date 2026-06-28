@@ -2,25 +2,30 @@
 """Обработчики основных команд: /start, /help, /about."""
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 
 router = Router()
+
+# Главная клавиатура управления кланом
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="📢 Новости"), KeyboardButton(text="📅 События")],
+        [KeyboardButton(text="📚 Гайды"), KeyboardButton(text="📸 Скриншоты")],
+        [KeyboardButton(text="👥 Участники"), KeyboardButton(text="⚙️ Настройки")],
+        [KeyboardButton(text="❓ Помощь")],
+    ],
+    resize_keyboard=True,
+)
 
 
 @router.message(CommandStart())
 async def handle_start(message: Message) -> None:
-    """Приветственное сообщение при первом запуске или команде /start."""
-    user = message.from_user
-    name = user.full_name if user else "пользователь"
+    """Приветственное сообщение с главным меню при команде /start."""
     await message.answer(
-        f"👋 Привет, {name}!\n\n"
-        "Я ваш Telegram-бот на базе aiogram 3.\n\n"
-        "Вот что я умею:\n"
-        "/start — показать это приветствие\n"
-        "/help — показать доступные команды\n"
-        "/echo &lt;текст&gt; — повторить ваш текст\n"
-        "/about — узнать о боте",
-        parse_mode="HTML"
+        "🌌 Добро пожаловать в Astrum!\n\n"
+        "Рады видеть тебя в системе управления кланом.\n"
+        "Выберите нужный раздел.",
+        reply_markup=MAIN_KEYBOARD,
     )
 
 
@@ -29,7 +34,7 @@ async def handle_help(message: Message) -> None:
     """Показывает список доступных команд."""
     await message.answer(
         "📖 <b>Доступные команды</b>\n\n"
-        "/start — приветственное сообщение\n"
+        "/start — главное меню\n"
         "/help — показать эту справку\n"
         "/echo &lt;текст&gt; — повторить ваш текст\n"
         "/about — о боте",
