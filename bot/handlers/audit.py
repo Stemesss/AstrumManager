@@ -29,15 +29,9 @@ from bot.states.audit import AuditSearch
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Все три административные роли имеют одинаковые права в журнале
 _ADMIN_ROLES = UserRole.admin_roles()
 
-_MENU_TEXT = (
-    "━━━━━━━━━━━━━━━━━━━━\n"
-    "📋 <b>Журнал действий</b>\n"
-    "━━━━━━━━━━━━━━━━━━━━\n\n"
-    "Выберите категорию для просмотра:"
-)
+_MENU_TEXT = "📋 <b>Журнал действий</b>\n\nВыберите категорию для просмотра:"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -50,29 +44,21 @@ def _fmt_dt(dt_str: str) -> str:
         date_part, time_part = dt_str[:16].split(" ")
         y, m, d = date_part.split("-")
         return f"{d}.{m}.{y} • {time_part}"
-    except Exception:  # noqa: BLE001
+    except Exception:
         return dt_str
 
 
 def _format_entry(row) -> str:
     """Форматирует одну запись журнала в виде карточки."""
     return (
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"<b>#{row['id']:06d}</b>\n\n"
-        f"{row['description']}\n\n"
-        f"🕘 {_fmt_dt(row['created_at'])}\n"
-        "━━━━━━━━━━━━━━━━━━━━"
+        f"<b>#{row['id']:06d}</b>  •  🕘 {_fmt_dt(row['created_at'])}\n"
+        f"{row['description']}"
     )
 
 
 def _page_text(category: str, records: list, total: int) -> str:
     label = CATEGORY_LABELS.get(category, category)
-    header = (
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"📋 <b>Журнал — {label}</b>\n"
-        f"Всего записей: {total}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-    )
+    header = f"📋 <b>Журнал — {label}</b>  •  Записей: {total}\n\n"
     return header + "\n\n".join(_format_entry(r) for r in records)
 
 
@@ -117,9 +103,9 @@ async def cb_audit_view(
     user_service: UserService,
     audit_service: AuditService,
 ) -> None:
-    parts = callback.data.split(":")
+    parts    = callback.data.split(":")
     category = parts[2]
-    page = int(parts[3])
+    page     = int(parts[3])
 
     role = await user_service.get_role(callback.from_user.id)
     if role not in _ADMIN_ROLES:
@@ -132,10 +118,7 @@ async def cb_audit_view(
     if not records:
         label = CATEGORY_LABELS.get(category, category)
         await callback.message.edit_text(
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"📋 <b>Журнал — {label}</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "Записей пока нет.",
+            f"📋 <b>Журнал — {label}</b>\n\nЗаписей пока нет.",
             reply_markup=audit_page_kb(category, 0, 1),
         )
         return
@@ -187,7 +170,7 @@ async def fsm_audit_search(
         await message.answer("⚠️ Введите поисковый запрос текстом.")
         return
 
-    query = message.text.strip()
+    query   = message.text.strip()
     results = await audit_service.search(query)
     await state.clear()
 
@@ -200,10 +183,7 @@ async def fsm_audit_search(
 
     entries = "\n\n".join(_format_entry(r) for r in results)
     await message.answer(
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔍 <b>Результаты: «{query}»</b>\n"
-        f"Найдено: {len(results)}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🔍 <b>Результаты: «{query}»</b>  •  Найдено: {len(results)}\n\n"
         + entries,
         reply_markup=audit_search_result_kb(),
     )
@@ -216,7 +196,7 @@ async def handle_cancel_search(message: Message, state: FSMContext) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Очистка журнала  (все административные роли)
+# Очистка журнала
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "alog:clear")
@@ -231,7 +211,7 @@ async def cb_audit_clear_confirm(
     await callback.answer()
     await callback.message.edit_text(
         "🗑 <b>Очистка журнала</b>\n\n"
-        "Все записи журнала будут безвозвратно удалены.\n\n"
+        "Все записи будут безвозвратно удалены.\n\n"
         "Вы уверены?",
         reply_markup=audit_clear_confirm_kb(),
     )
@@ -254,9 +234,7 @@ async def cb_audit_clear_execute(
     )
     await callback.answer(f"🗑 Удалено записей: {deleted}", show_alert=True)
     await callback.message.edit_text(
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "📋 <b>Журнал действий</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📋 <b>Журнал действий</b>\n\n"
         f"✅ Журнал очищен. Удалено записей: <b>{deleted}</b>.\n\n"
         "Выберите категорию для просмотра:",
         reply_markup=audit_menu_kb(role),

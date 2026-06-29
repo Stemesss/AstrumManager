@@ -19,20 +19,16 @@ logger = logging.getLogger(__name__)
 _MSK = timezone(timedelta(hours=3))
 
 _WELCOME_NEW = (
-    "━━━━━━━━━━━━━━━━━━━━\n"
-    "🌌 <b>Добро пожаловать в Astrum!</b>\n"
-    "━━━━━━━━━━━━━━━━━━━━\n\n"
+    "🌌 <b>Добро пожаловать в Astrum!</b>\n\n"
     "Твой профиль успешно создан.\n\n"
-    "🎖 <b>Роль:</b>\n"
-    "👤 Участник\n\n"
-    "Теперь тебе доступны:\n\n"
+    "🎖 <b>Роль:</b> 👤 Участник\n\n"
+    "Тебе доступны:\n"
     "📖 Просмотр новостей\n"
     "📚 Просмотр гайдов\n"
     "📸 Просмотр скриншотов\n"
     "📅 Просмотр событий\n"
     "👤 Личный профиль\n\n"
-    "Приятной игры!\n\n"
-    "━━━━━━━━━━━━━━━━━━━━"
+    "Приятной игры!"
 )
 
 
@@ -72,10 +68,7 @@ async def handle_start(
         await user_service.log_registration(user)
         await message.answer(_WELCOME_NEW)
         await message.answer(
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "⚜️ <b>AstrumManager</b>\n"
-            "Главное меню\n"
-            "━━━━━━━━━━━━━━━━━━━━",
+            "⚜️ <b>AstrumManager</b>  •  Главное меню",
             reply_markup=MAIN_KEYBOARD,
         )
         return
@@ -85,15 +78,12 @@ async def handle_start(
         await state.set_state(NickSetup.waiting_nick)
         logger.info("Пользователь %s без ника — запрос игрового ника", user.telegram_id)
         await message.answer(
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "⚜️ <b>AstrumManager</b>\n"
+            "⚜️ <b>AstrumManager</b>\n\n"
             "👋 Добро пожаловать!\n\n"
-            "Для использования бота необходимо указать свой игровой ник.\n\n"
-            "Напишите ваш игровой ник одним сообщением.\n\n"
-            "Например:\n"
+            "Для использования бота укажите игровой ник.\n\n"
+            "Напишите ник одним сообщением, например:\n"
             "<code>Stemess</code>\n\n"
-            "<b>Введите ник:</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━",
+            "<b>Введите ник:</b>",
         )
         return
 
@@ -106,13 +96,9 @@ async def handle_start(
         user.telegram_id, user.game_nick, greeting_word, now.hour,
     )
     await message.answer(
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "⚜️ <b>AstrumManager</b>\n"
-        f"{header}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"⚜️ <b>AstrumManager</b>  •  {header}\n\n"
         f"{greeting_word}, <b>{user.game_nick}</b>! {emoji}\n\n"
         "Рады снова видеть тебя в сообществе Astrum.\n\n"
-        "Желаем удачной игры и хорошего настроения!\n\n"
         "Выберите нужный раздел ниже.",
         reply_markup=MAIN_KEYBOARD,
     )

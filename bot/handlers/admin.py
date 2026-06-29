@@ -41,7 +41,6 @@ _ROLE_ICONS = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _format_uptime(start: datetime.datetime) -> str:
-    """Форматирует время работы бота в читаемый вид."""
     now   = datetime.datetime.now(datetime.timezone.utc)
     delta = now - start
     total = int(delta.total_seconds())
@@ -70,34 +69,24 @@ async def _build_panel(
 ) -> str:
     counts = _role_stats(users)
     total  = len(users)
-
     uptime = _format_uptime(start_time) if start_time else "—"
 
-    # Блок состава: только роли из иерархии
     members_block = ""
     for r in ROLE_ORDER:
-        icon = _ROLE_ICONS[r]
+        icon  = _ROLE_ICONS[r]
         label = role_label(r)
-        cnt = counts.get(r, 0)
+        cnt   = counts.get(r, 0)
         members_block += f"{icon} {label}: {cnt}\n"
 
     return (
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "🛡️ <b>AstrumManager</b>\n"
-        "<b>Панель управления</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🟢 Статус бота: Онлайн\n"
-        f"⏳ Работает: {uptime}\n"
-        f"🤖 Версия: {_VERSION}\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"👥 Участников: {total}\n"
+        "🛡️ <b>Панель управления</b>\n\n"
+        f"🟢 Онлайн  •  ⏳ {uptime}  •  🤖 {_VERSION}\n\n"
+        f"👥 Всего участников: {total}\n"
         f"{members_block}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"📰 Новостей: {news_count}\n"
         f"📅 Событий: 0\n"
         f"📚 Гайдов: 0\n"
         f"📸 Скриншотов: 0\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
         "Выберите раздел:"
     )
 
@@ -148,7 +137,6 @@ async def handle_admin(
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _check_admin(callback: CallbackQuery, user_service: UserService) -> UserRole | None:
-    """Проверяет права и возвращает роль или None (если доступ запрещён)."""
     if not callback.from_user:
         await callback.answer()
         return None
@@ -182,8 +170,7 @@ async def cb_news(
     await state.update_data(content_type="news")
     await callback.answer()
     await callback.message.answer(
-        "📰 <b>Создание новости</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📰 <b>Создание новости</b>\n\n"
         "Введите <b>заголовок</b> новости (до 100 символов):\n\n"
         "<i>Отправьте /cancel для отмены</i>",
         reply_markup=MAIN_KEYBOARD,
@@ -201,8 +188,7 @@ async def cb_events(
     await state.update_data(content_type="events")
     await callback.answer()
     await callback.message.answer(
-        "📅 <b>Создание события</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📅 <b>Создание события</b>\n\n"
         "Введите <b>заголовок</b> события (до 100 символов):\n\n"
         "<i>Отправьте /cancel для отмены</i>",
         reply_markup=MAIN_KEYBOARD,
@@ -220,8 +206,7 @@ async def cb_guides(
     await state.update_data(content_type="guides")
     await callback.answer()
     await callback.message.answer(
-        "📚 <b>Создание гайда</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📚 <b>Создание гайда</b>\n\n"
         "Введите <b>заголовок</b> гайда (до 100 символов):\n\n"
         "<i>Отправьте /cancel для отмены</i>",
         reply_markup=MAIN_KEYBOARD,
@@ -239,8 +224,7 @@ async def cb_screenshots(
     await state.update_data(content_type="screenshots")
     await callback.answer()
     await callback.message.answer(
-        "📸 <b>Создание скриншота</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📸 <b>Создание скриншота</b>\n\n"
         "Введите <b>заголовок</b> скриншота (до 100 символов):\n\n"
         "<i>Отправьте /cancel для отмены</i>",
         reply_markup=MAIN_KEYBOARD,
@@ -277,9 +261,7 @@ async def cb_audit(callback: CallbackQuery, user_service: UserService) -> None:
         return
     await callback.answer()
     await callback.message.answer(
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "📋 <b>Журнал действий</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📋 <b>Журнал действий</b>\n\n"
         "Выберите категорию для просмотра:",
         reply_markup=audit_menu_kb(role),
     )

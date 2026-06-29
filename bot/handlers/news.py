@@ -58,6 +58,16 @@ def _format_date(dt_str: str) -> str:
         return dt_str
 
 
+def _news_card(item) -> str:
+    """Форматирует карточку новости без разделителей."""
+    pin_badge = "📌 " if item.pinned else ""
+    return (
+        f"{pin_badge}<b>{item.title}</b>\n\n"
+        f"{item.content}\n\n"
+        f"📅 {_format_date(item.created_at)}  •  ✍️ {item.author_name}"
+    )
+
+
 async def _show_news_list(
     target: Message | CallbackQuery,
     news_service: NewsService,
@@ -71,11 +81,7 @@ async def _show_news_list(
     items = await news_service.get_list()
 
     if not items:
-        text = (
-            "📰 <b>Новости клана Astrum</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "Новостей пока нет."
-        )
+        text = "📰 <b>Новости клана Astrum</b>\n\nНовостей пока нет."
         kb = news_list_kb([], is_manager)
     else:
         pinned = [i for i in items if i.pinned]
@@ -84,8 +90,7 @@ async def _show_news_list(
         if pinned:
             count_line += f"  •  📌 закреплено: {len(pinned)}"
         text = (
-            "📰 <b>Новости клана Astrum</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "📰 <b>Новости клана Astrum</b>\n\n"
             f"{count_line}\n\n"
             "Выберите новость:"
         )
@@ -145,17 +150,9 @@ async def cb_news_view(
     role = await user_service.get_role(callback.from_user.id)
     is_manager = role in NEWS_MANAGER_ROLES
 
-    pin_badge = "📌 " if item.pinned else ""
-    text = (
-        f"{pin_badge}<b>{item.title}</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"{item.content}\n\n"
-        f"📅 {_format_date(item.created_at)}\n"
-        f"✍️ {item.author_name}"
-    )
     await callback.answer()
     await callback.message.edit_text(
-        text,
+        _news_card(item),
         reply_markup=news_view_kb(item.id, item.pinned, is_manager),
     )
 
@@ -180,14 +177,11 @@ async def cb_news_create(
     await state.update_data(content_type="news")
     await callback.answer()
     await callback.message.answer(
-        "📰 <b>Создание новости</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📰 <b>Создание новости</b>\n\n"
         f"Введите <b>заголовок</b> новости (до {_MAX_TITLE_LEN} символов):\n\n"
         "<i>Отправьте /cancel для отмены</i>",
         reply_markup=MAIN_KEYBOARD,
     )
-
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -282,7 +276,6 @@ async def fsm_edit_title(
         "Пользователь %s обновил заголовок новости #%d", message.from_user.id, news_id
     )
 
-    # Журнал
     actor_nick = await user_service.get_game_nick(message.from_user.id) or "?"
     actor_role = await user_service.get_role(message.from_user.id)
     await audit_service.log(
@@ -329,7 +322,6 @@ async def fsm_edit_content(
         "Пользователь %s обновил текст новости #%d", message.from_user.id, news_id
     )
 
-    # Журнал
     actor_nick = await user_service.get_game_nick(message.from_user.id) or "?"
     actor_role = await user_service.get_role(message.from_user.id)
     await audit_service.log(
@@ -382,14 +374,12 @@ async def cb_delete(
         return
     news_id = int(callback.data.split(":")[2])
 
-    # Читаем название до удаления (для журнала)
     item = await news_service.get_by_id(news_id)
     title_for_log = item.title if item else f"#{news_id}"
 
     await news_service.delete(news_id)
     logger.info("Пользователь %s удалил новость #%d", callback.from_user.id, news_id)
 
-    # Журнал
     actor_nick = await user_service.get_game_nick(callback.from_user.id) or "?"
     await audit_service.log(
         user_id=callback.from_user.id,
@@ -426,7 +416,6 @@ async def cb_pin(
         "Пользователь %s %s новость #%d", callback.from_user.id, action_word, news_id
     )
 
-    # Журнал
     item = await news_service.get_by_id(news_id)
     title_for_log = item.title if item else f"#{news_id}"
     actor_nick = await user_service.get_game_nick(callback.from_user.id) or "?"
@@ -444,21 +433,12 @@ async def cb_pin(
 
     await callback.answer(f"{'📌' if new_state else '📍'} Новость {action_word}.")
 
-    # Обновляем карточку новости
     if not item:
         await _show_news_list(callback, news_service, user_service, edit=True)
         return
     is_manager = role in NEWS_MANAGER_ROLES
-    pin_badge = "📌 " if item.pinned else ""
-    text = (
-        f"{pin_badge}<b>{item.title}</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"{item.content}\n\n"
-        f"📅 {_format_date(item.created_at)}\n"
-        f"✍️ {item.author_name}"
-    )
     await callback.message.edit_text(
-        text,
+        _news_card(item),
         reply_markup=news_view_kb(item.id, item.pinned, is_manager),
     )
 

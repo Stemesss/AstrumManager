@@ -89,9 +89,7 @@ def _has_attachments(a: dict) -> bool:
 
 def _build_attach_prompt(attachments: dict) -> str:
     lines = [
-        "━━━━━━━━━━━━━━━━━━━━",
-        "📎 <b>Вложения</b>",
-        "━━━━━━━━━━━━━━━━━━━━\n",
+        "📎 <b>Вложения</b>\n",
         "Прикрепите вложения к публикации:\n",
         "🖼 Отправьте фото (одно или несколько)",
         "🎥 Отправьте видео",
@@ -118,7 +116,7 @@ def _build_attach_summary(attachments: dict) -> str:
     """Блок вложений для предпросмотра."""
     if not _has_attachments(attachments):
         return ""
-    lines = ["━━━━━━━━━━━━━━━━━━━━\n\n📎 <b>Вложения</b>"]
+    lines = ["📎 <b>Вложения</b>"]
     if p := len(attachments.get("photos", [])):
         lines.append(f"🖼 Фото: {p}")
     if v := len(attachments.get("videos", [])):
@@ -146,22 +144,15 @@ def _build_preview(
     attachments: dict | None = None,
 ) -> str:
     text = (
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"{icon} <b>Предпросмотр — {label}</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{icon} <b>Предпросмотр — {label}</b>\n\n"
         "📝 <b>Заголовок</b>\n"
         f"{title}\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
         "📄 <b>Текст</b>\n"
         f"{content}\n\n"
     )
     if attachments and _has_attachments(attachments):
         text += _build_attach_summary(attachments) + "\n\n"
-    text += (
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Проверьте информацию перед публикацией.\n"
-        "━━━━━━━━━━━━━━━━━━━━"
-    )
+    text += "Проверьте информацию перед публикацией."
     return text
 
 
@@ -230,7 +221,6 @@ async def handle_waiting_content(message: Message, state: FSMContext) -> None:
 async def handle_waiting_attachments(message: Message, state: FSMContext, bot: Bot) -> None:
     data        = await state.get_data()
     attachments = data.get("attachments") or _empty_attachments()
-    added       = ""
 
     if message.photo:
         photo = message.photo[-1]
@@ -238,7 +228,6 @@ async def handle_waiting_attachments(message: Message, state: FSMContext, bot: B
             "file_id":        photo.file_id,
             "file_unique_id": photo.file_unique_id,
         })
-        added = f"🖼 Фото добавлено. Всего фото: {len(attachments['photos'])}"
 
     elif message.video:
         v = message.video
@@ -246,7 +235,6 @@ async def handle_waiting_attachments(message: Message, state: FSMContext, bot: B
             "file_id":        v.file_id,
             "file_unique_id": v.file_unique_id,
         })
-        added = f"🎥 Видео добавлено. Всего видео: {len(attachments['videos'])}"
 
     elif message.document:
         d = message.document
@@ -255,13 +243,11 @@ async def handle_waiting_attachments(message: Message, state: FSMContext, bot: B
             "file_unique_id": d.file_unique_id,
             "file_name":      d.file_name or "",
         })
-        added = f"📄 Документ добавлен. Всего: {len(attachments['documents'])}"
 
     elif message.text and not message.text.startswith("/"):
         urls = _URL_RE.findall(message.text)
         if urls:
             attachments["links"].extend(urls)
-            added = f"🔗 Ссылок добавлено: {len(urls)}. Всего: {len(attachments['links'])}"
         else:
             await message.answer(
                 "⚠️ Не распознан тип вложения.\n"
@@ -277,7 +263,6 @@ async def handle_waiting_attachments(message: Message, state: FSMContext, bot: B
 
     await state.update_data(attachments=attachments)
 
-    # Обновляем сообщение-приглашение с актуальным счётчиком
     attach_msg_id = data.get("attach_msg_id")
     if attach_msg_id:
         try:
@@ -288,7 +273,7 @@ async def handle_waiting_attachments(message: Message, state: FSMContext, bot: B
                 reply_markup=ATTACH_KB,
             )
         except Exception:
-            pass  # Сообщение уже удалено или устарело — не страшно
+            pass
 
 
 # ── Callback: ✅ Готово (шаг вложений) ────────────────────────────────────────
@@ -419,12 +404,11 @@ async def cb_confirm(
                 content_type, pub_id, d["file_id"], d["file_unique_id"], "document", d.get("file_name")
             )
 
-    # ── Текст публикации ──────────────────────────────────────────────────
+    # ── Текст публикации в группу ─────────────────────────────────────────
     links = attachments.get("links", [])
     link_block = ("\n\n🔗 " + "\n🔗 ".join(links)) if links else ""
     group_text = (
-        f"{cfg['icon']} <b>{title}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{cfg['icon']} <b>{title}</b>\n\n"
         f"{content}"
         f"{link_block}\n\n"
         f"📅 {_format_date(pub_date)}  •  ✍️ {author_name}"
@@ -453,8 +437,7 @@ async def cb_confirm(
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
         f"✅ <b>{cfg['icon']} {cfg['label']} опубликован(а)!</b>\n\n"
-        f"<b>{title}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>{title}</b>\n\n"
         f"{content[:200]}{'…' if len(content) > 200 else ''}\n\n"
         f"📅 {_format_date(pub_date)}"
         f"{attach_note}"

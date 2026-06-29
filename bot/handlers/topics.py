@@ -21,8 +21,7 @@ from bot.states.topics import TopicSetup
 router = Router()
 logger = logging.getLogger(__name__)
 
-_HEADER = "━━━━━━━━━━━━━━━━━━━━"
-_MENU_TITLE = f"{_HEADER}\n🧵 <b>Настройка веток</b>\n{_HEADER}"
+_MENU_TITLE = "🧵 <b>Настройка веток</b>"
 
 
 async def _check_admin(cb: CallbackQuery, user_service: UserService) -> bool:
@@ -43,7 +42,6 @@ async def cb_settings(
     user_service: UserService,
     topic_service: TopicService,
 ) -> None:
-    """Открывает раздел «⚙️ Настройки» → список веток."""
     if not await _check_admin(callback, user_service):
         return
     await callback.answer()
@@ -64,7 +62,6 @@ async def cb_topic_select(
     user_service: UserService,
     state: FSMContext,
 ) -> None:
-    """Пользователь выбрал ветку — запрашиваем Message Thread ID."""
     if not await _check_admin(callback, user_service):
         return
     topic_name = callback.data[len(TopicBtn.PREFIX):]
@@ -76,11 +73,8 @@ async def cb_topic_select(
     await state.update_data(topic_name=topic_name)
     await callback.answer()
     await callback.message.answer(
-        f"{_HEADER}\n"
-        f"🧵 <b>Настройка ветки</b>\n"
-        f"{_HEADER}\n\n"
-        f"Введите <b>Message Thread ID</b>\n"
-        f"для ветки «{label}»:\n\n"
+        f"🧵 <b>Настройка ветки</b>\n\n"
+        f"Введите <b>Message Thread ID</b> для ветки «{label}»:\n\n"
         f"<i>Чтобы узнать ID, перешлите любое сообщение из нужной ветки боту "
         f"@RawDataBot или нажмите «Копировать ссылку» — ID указан после #.</i>\n\n"
         f"Введите <code>0</code> чтобы отключить ветку.",
@@ -99,15 +93,14 @@ async def handle_thread_id(
     user_service: UserService,
     topic_service: TopicService,
 ) -> None:
-    """Сохраняет введённый Message Thread ID."""
     role = await user_service.get_role(message.from_user.id)
     if role not in UserRole.admin_roles():
         await state.clear()
         return
 
-    data = await state.get_data()
-    topic_name: str = data.get("topic_name", "")
-    raw = (message.text or "").strip()
+    data       = await state.get_data()
+    topic_name = data.get("topic_name", "")
+    raw        = (message.text or "").strip()
 
     if not raw.lstrip("-").isdigit():
         await message.answer(
@@ -131,11 +124,7 @@ async def handle_thread_id(
         status = f"настроена → thread ID <code>{thread_id}</code>"
 
     topics = await topic_service.list_topics()
-    await message.answer(
-        f"{_HEADER}\n"
-        f"✅ Ветка «{label}» {status}.\n"
-        f"{_HEADER}",
-    )
+    await message.answer(f"✅ Ветка «{label}» {status}.")
     await message.answer(
         f"{_MENU_TITLE}\n\nВыберите ветку для настройки:",
         reply_markup=topics_menu_kb(topics),
@@ -152,7 +141,6 @@ async def handle_thread_id(
 
 @router.callback_query(F.data == TopicBtn.CANCEL)
 async def cb_topics_cancel(callback: CallbackQuery, state: FSMContext) -> None:
-    """Отмена ввода Thread ID."""
     await state.clear()
     await callback.answer("Отменено.")
     await callback.message.delete()
@@ -160,6 +148,5 @@ async def cb_topics_cancel(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == TopicBtn.BACK)
 async def cb_topics_back(callback: CallbackQuery) -> None:
-    """Возврат к панели администрации."""
     await callback.answer()
     await callback.message.delete()

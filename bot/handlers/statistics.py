@@ -28,11 +28,7 @@ logger = logging.getLogger(__name__)
 
 _WIP = "🚧 Раздел находится в разработке."
 
-_MENU_TEXT = (
-    "━━━━━━━━━━━━━━━━━━━━\n"
-    "📈 <b>Центр статистики</b>\n"
-    "━━━━━━━━━━━━━━━━━━━━"
-)
+_MENU_TEXT = "📈 <b>Центр статистики</b>"
 
 _SECTION_NAMES: dict[str, str] = {
     StatisticsBtn.BEST_MONTH:       "🏆 Лучший участник месяца",
@@ -45,8 +41,6 @@ _SECTION_NAMES: dict[str, str] = {
     StatisticsBtn.GROWTH:           "📈 Рост клана",
     StatisticsBtn.HALL_OF_FAME:     "👑 Зал славы",
 }
-
-_HEADER = "━━━━━━━━━━━━━━━━━━━━"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -65,28 +59,21 @@ async def _check_admin(callback: CallbackQuery, user_service: UserService) -> bo
 def _fmt_winner_card(icon: str, title: str, u: UserActivity) -> str:
     """Универсальная карточка победителя (используется в разных периодах)."""
     return (
-        f"{_HEADER}\n"
-        f"{icon} <b>{title}</b>\n"
-        f"{_HEADER}\n\n"
-        f"👤 Ник:\n{u.game_nick}\n\n"
-        f"⭐ Очков:\n{u.score}\n\n"
-        f"📰 Новостей:\n{u.news_count}\n\n"
-        f"📚 Гайдов:\n{u.guides_count}\n\n"
-        f"📸 Скриншотов:\n{u.screenshots_count}\n\n"
-        f"📅 Событий:\n{u.events_count}\n\n"
-        f"{_HEADER}"
+        f"{icon} <b>{title}</b>\n\n"
+        f"👤 {u.game_nick}\n"
+        f"⭐ {u.score} очков\n\n"
+        f"📰 Новостей: {u.news_count}\n"
+        f"📚 Гайдов: {u.guides_count}\n"
+        f"📸 Скриншотов: {u.screenshots_count}\n"
+        f"📅 Событий: {u.events_count}"
     )
 
 
 def _fmt_no_data(icon: str, title: str, period_hint: str) -> str:
     """Заглушка «нет данных» для карточек победителей."""
     return (
-        f"{_HEADER}\n"
-        f"{icon} <b>{title}</b>\n"
-        f"{_HEADER}\n\n"
-        f"🚧 Пока недостаточно данных для определения\n"
-        f"{period_hint}\n\n"
-        f"{_HEADER}"
+        f"{icon} <b>{title}</b>\n\n"
+        f"🚧 Пока недостаточно данных для определения {period_hint}"
     )
 
 
@@ -111,20 +98,20 @@ def _fmt_top_authors(authors: list) -> str:
 def _fmt_news_card(s: "NewsStats") -> str:
     """Карточка раздела «Новости»."""
     if not s.total:
-        return f"{_HEADER}\n📰 <b>Новости</b>\n{_HEADER}\n\n🚧 Пока недостаточно данных.\n\n{_HEADER}"
+        return "📰 <b>Новости</b>\n\n🚧 Пока недостаточно данных."
     top_block = _fmt_top_authors(s.top_authors) if s.top_authors else "—"
     last_block = ""
     if s.latest_title or s.latest_date:
-        last_block = (
-            f"\n{_HEADER}\n🕒 Последняя публикация\n"
-            + (f"\"{s.latest_title}\"\n" if s.latest_title else "")
-            + (_fmt_date(s.latest_date) if s.latest_date else "")
-        )
+        last_block = "\n\n🕒 <b>Последняя публикация</b>\n"
+        if s.latest_title:
+            last_block += f"«{s.latest_title}»\n"
+        if s.latest_date:
+            last_block += _fmt_date(s.latest_date)
     return (
-        f"{_HEADER}\n📰 <b>Новости</b>\n{_HEADER}\n\n"
+        f"📰 <b>Новости</b>\n\n"
         f"📄 Всего новостей: {s.total}\n\n"
         f"🥇 Топ авторов\n{top_block}"
-        f"{last_block}\n\n{_HEADER}"
+        f"{last_block}"
     )
 
 
@@ -139,19 +126,19 @@ def _fmt_content_card(
 ) -> str:
     """Универсальная карточка контентного раздела (гайды / скриншоты / события)."""
     if not s.total:
-        return f"{_HEADER}\n{icon} <b>{title}</b>\n{_HEADER}\n\n🚧 Пока недостаточно данных.\n\n{_HEADER}"
+        return f"{icon} <b>{title}</b>\n\n🚧 Пока недостаточно данных."
     top_block = _fmt_top_authors(s.top_authors) if s.top_authors else "—"
     last_block = ""
     if s.latest_date:
-        last_block = f"\n{_HEADER}\n🕒 {last_label}\n"
+        last_block = f"\n\n🕒 {last_label}\n"
         if show_last_name and s.latest_description:
             last_block += f"{s.latest_description}\n"
         last_block += _fmt_date(s.latest_date)
     return (
-        f"{_HEADER}\n{icon} <b>{title}</b>\n{_HEADER}\n\n"
+        f"{icon} <b>{title}</b>\n\n"
         f"📄 {total_label}: {s.total}\n\n"
         f"🥇 {top_label}\n{top_block}"
-        f"{last_block}\n\n{_HEADER}"
+        f"{last_block}"
     )
 
 
@@ -305,22 +292,22 @@ async def cb_events(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
 # 🏆 Топ-10 участников
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fmt_top10_card(users: list) -> str:
     if not users:
-        return f"{_HEADER}\n🏆 <b>Топ-10 участников</b>\n{_HEADER}\n\n🚧 Пока недостаточно данных.\n\n{_HEADER}"
+        return "🏆 <b>Топ-10 участников</b>\n\n🚧 Пока недостаточно данных."
     lines = "\n".join(
         f"{i + 1}. {u.game_nick} — {u.score} оч."
         for i, u in enumerate(users)
     )
     formula = (
-        "📌 Очки считаются автоматически по журналу действий.\n"
-        "Формула:\n📰 Новость = 5  📅 Событие = 8\n📚 Гайд = 10  📸 Скриншот = 2"
+        "📌 <i>Очки считаются по журналу:\n"
+        "📰 Новость = 5  📅 Событие = 8\n"
+        "📚 Гайд = 10  📸 Скриншот = 2</i>"
     )
-    return f"{_HEADER}\n🏆 <b>Топ-10 участников</b>\n{_HEADER}\n\n{lines}\n\n{_HEADER}\n\n{formula}\n\n{_HEADER}"
+    return f"🏆 <b>Топ-10 участников</b>\n\n{lines}\n\n{formula}"
 
 
 @router.callback_query(F.data == StatisticsBtn.TOP10)
@@ -342,18 +329,15 @@ async def cb_top10(
 
 def _fmt_growth_card(g) -> str:
     if not g.total:
-        return f"{_HEADER}\n📈 <b>Рост клана</b>\n{_HEADER}\n\n🚧 Пока недостаточно данных.\n\n{_HEADER}"
+        return "📈 <b>Рост клана</b>\n\n🚧 Пока недостаточно данных."
     bar = "".join("█" if cnt > 0 else "░" for _, cnt in g.by_day)
     days = len(g.by_day)
     return (
-        f"{_HEADER}\n📈 <b>Рост клана</b>\n{_HEADER}\n\n"
+        f"📈 <b>Рост клана</b>\n\n"
         f"👥 Всего участников: {g.total}\n"
-        f"📅 Сегодня: +{g.today}\n"
-        f"📆 За месяц: +{g.month}\n\n"
-        f"{_HEADER}\n"
+        f"📅 Сегодня: +{g.today}  •  За месяц: +{g.month}\n\n"
         f"Последние {days} дней\n"
-        f"{bar}\n\n"
-        f"{_HEADER}"
+        f"{bar}"
     )
 
 
@@ -376,8 +360,8 @@ async def cb_growth(
 
 def _fmt_hof_row(icon: str, label: str, name: str | None, extra: str = "") -> str:
     if not name:
-        return f"{_HEADER}\n{icon} {label}\n🚧 Нет данных"
-    return f"{_HEADER}\n{icon} {label}\n{name}" + (f"\n{extra}" if extra else "")
+        return f"{icon} <b>{label}</b>\n🚧 Нет данных"
+    return f"{icon} <b>{label}</b>\n{name}" + (f"  •  {extra}" if extra else "")
 
 
 def _fmt_hall_of_fame_card(
@@ -389,20 +373,19 @@ def _fmt_hall_of_fame_card(
     best_events = events_s.top_authors[0].name      if events_s.top_authors      else None
 
     rows = [
-        f"{_HEADER}\n👑 <b>Зал славы</b>",
+        "👑 <b>Зал славы</b>",
         _fmt_hof_row("🥇", "Лучший участник месяца",
                      month_winner.game_nick if month_winner else None,
                      f"{month_winner.score} очков" if month_winner else ""),
         _fmt_hof_row("🔥", "Самый активный недели",
                      week_winner.game_nick if week_winner else None,
                      f"{week_winner.score} очков" if week_winner else ""),
-        _fmt_hof_row("📰", "Лучший автор новостей",   best_news),
-        _fmt_hof_row("📚", "Лучший автор гайдов",     best_guides),
-        _fmt_hof_row("📸", "Лучший по скриншотам",    best_shots),
+        _fmt_hof_row("📰", "Лучший автор новостей",      best_news),
+        _fmt_hof_row("📚", "Лучший автор гайдов",        best_guides),
+        _fmt_hof_row("📸", "Лучший по скриншотам",       best_shots),
         _fmt_hof_row("📅", "Лучший организатор событий", best_events),
-        _HEADER,
     ]
-    return "\n".join(rows)
+    return "\n\n".join(rows)
 
 
 @router.callback_query(F.data == StatisticsBtn.HALL_OF_FAME)

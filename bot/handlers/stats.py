@@ -26,12 +26,7 @@ _NO_DATA = "Пока недостаточно данных."
 
 _RANK_ICONS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
-_MENU_TEXT = (
-    "━━━━━━━━━━━━━━━━━━━━\n"
-    "📈 <b>AstrumManager</b>\n"
-    "<b>Центр статистики</b>\n"
-    "━━━━━━━━━━━━━━━━━━━━"
-)
+_MENU_TEXT = "📈 <b>Центр статистики</b>"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -68,38 +63,28 @@ def _fmt_top1(u: UserActivity) -> str:
     from bot.models.user import UserRole
     role_enum = UserRole.from_str(u.role)
     return (
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "🔥 <b>Самый активный участник</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🔥 <b>Самый активный участник</b>\n\n"
         f"🎮 <b>{u.game_nick}</b>\n"
         f"🎖 {role_label(role_enum)}\n\n"
         f"📰 Новостей: {u.news_count}  →  {u.news_count * 5} очков\n"
         f"📚 Гайдов: {u.guides_count}  →  {u.guides_count * 10} очков\n"
         f"📸 Скриншотов: {u.screenshots_count}  →  {u.screenshots_count * 2} очка\n"
         f"📅 Событий: {u.events_count}  →  {u.events_count * 8} очков\n\n"
-        f"📈 <b>Общая активность: {u.score} очков</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━"
+        f"📈 <b>Общая активность: {u.score} очков</b>"
     )
 
 
 def _fmt_top10(users: list[UserActivity]) -> str:
-    lines = [
-        "━━━━━━━━━━━━━━━━━━━━",
-        "🏆 <b>Топ-10 участников</b>",
-        "━━━━━━━━━━━━━━━━━━━━\n",
-    ]
+    lines = ["🏆 <b>Топ-10 участников</b>\n"]
     for i, u in enumerate(users, start=1):
         icon = _RANK_ICONS.get(i, f"{i}.")
         lines.append(f"{icon} {u.game_nick} — {u.score} очков")
-    lines.append("\n━━━━━━━━━━━━━━━━━━━━")
     return "\n".join(lines)
 
 
 def _fmt_news(s: NewsStats) -> str:
     lines = [
-        "━━━━━━━━━━━━━━━━━━━━",
-        "📰 <b>Статистика новостей</b>",
-        "━━━━━━━━━━━━━━━━━━━━\n",
+        "📰 <b>Статистика новостей</b>\n",
         f"📊 Всего новостей: <b>{s.total}</b>",
     ]
     if s.top_authors:
@@ -113,15 +98,12 @@ def _fmt_news(s: NewsStats) -> str:
         lines.append(f"\n📅 <b>Последняя новость:</b>\n  «{s.latest_title}»")
         if s.latest_date:
             lines.append(f"  {_fmt_dt(s.latest_date)}")
-    lines.append("\n━━━━━━━━━━━━━━━━━━━━")
     return "\n".join(lines)
 
 
 def _fmt_content(title: str, s: ContentStats) -> str:
     lines = [
-        "━━━━━━━━━━━━━━━━━━━━",
-        f"<b>{title}</b>",
-        "━━━━━━━━━━━━━━━━━━━━\n",
+        f"<b>{title}</b>\n",
         f"📊 Всего: <b>{s.total}</b>",
     ]
     if s.top_authors:
@@ -132,20 +114,17 @@ def _fmt_content(title: str, s: ContentStats) -> str:
     else:
         lines.append(f"\n{_NO_DATA}")
     if s.latest_author:
-        lines.append(f"\n📅 <b>Последнее:</b>")
+        lines.append("\n📅 <b>Последнее:</b>")
         lines.append(f"  {s.latest_author}")
         if s.latest_date:
             lines.append(f"  {_fmt_dt(s.latest_date)}")
-    lines.append("\n━━━━━━━━━━━━━━━━━━━━")
     return "\n".join(lines)
 
 
 def _fmt_growth(g: ClanGrowth) -> str:
     max_val = max((cnt for _, cnt in g.by_day), default=0)
     lines = [
-        "━━━━━━━━━━━━━━━━━━━━",
-        "📊 <b>Рост клана</b>",
-        "━━━━━━━━━━━━━━━━━━━━\n",
+        "📊 <b>Рост клана</b>\n",
         f"👥 Всего участников: <b>{g.total}</b>\n",
         f"📅 Вступило сегодня: {g.today}",
         f"📅 За неделю: {g.week}",
@@ -159,7 +138,6 @@ def _fmt_growth(g: ClanGrowth) -> str:
             bar = _bar(cnt, max_val)
             label = _fmt_date(day_str)
             lines.append(f"<code>{label} {bar:<12} {cnt}</code>")
-    lines.append("\n━━━━━━━━━━━━━━━━━━━━")
     return "\n".join(lines)
 
 
@@ -231,13 +209,7 @@ async def cb_top1(
     text = (
         _fmt_top1(top)
         if top
-        else (
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "🔥 <b>Самый активный участник</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{_NO_DATA}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━"
-        )
+        else f"🔥 <b>Самый активный участник</b>\n\n{_NO_DATA}"
     )
     await callback.message.edit_text(text, reply_markup=STATS_BACK_KB)
 
@@ -252,16 +224,11 @@ async def cb_top10(
         return
     await callback.answer()
     users = await stats_service.top_active_users(10)
-    if users:
-        text = _fmt_top10(users)
-    else:
-        text = (
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "🏆 <b>Топ-10 участников</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{_NO_DATA}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━"
-        )
+    text = (
+        _fmt_top10(users)
+        if users
+        else f"🏆 <b>Топ-10 участников</b>\n\n{_NO_DATA}"
+    )
     await callback.message.edit_text(text, reply_markup=STATS_BACK_KB)
 
 
