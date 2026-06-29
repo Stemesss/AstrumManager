@@ -60,16 +60,25 @@ async def handle_members(message: Message, user_service: UserService) -> None:
 
 @router.message(F.text == BTN.SETTINGS)
 async def handle_settings(message: Message, user_service: UserService) -> None:
-    """Показывает текущие настройки пользователя."""
+    """Показывает профиль пользователя с актуальной ролью из БД."""
     if not message.from_user:
         return
+
+    # Обновляем last_seen и получаем базовые данные
     user = await user_service.get_or_create(message.from_user)
+    # Читаем роль отдельным запросом — всегда актуальное значение из БД
+    role = await user_service.get_role(message.from_user.id)
+
+    username_str = f"@{user.username}" if user.username else "не задан"
+
     await message.answer(
-        f"⚙️ <b>Настройки</b>\n\n"
-        f"Твой ID: <code>{user.telegram_id}</code>\n"
-        f"Имя: {user.first_name}\n"
-        f"Username: {'@' + user.username if user.username else 'не задан'}\n"
-        f"Роль: {role_label(user.role)}\n\n"
+        "⚙️ <b>Настройки профиля</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👤 <b>Имя:</b> {user.first_name}\n"
+        f"🔗 <b>Username:</b> {username_str}\n"
+        f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>\n"
+        f"🎖 <b>Роль в клане:</b> {role_label(role)}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
         f"{_WIP}",
     )
 
