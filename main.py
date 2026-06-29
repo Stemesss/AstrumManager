@@ -15,6 +15,7 @@ from bot.config import load_config
 from bot.database.db import Database
 from bot.handlers import admin, audit, cancel, common, complaints, content, debug, echo, group, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, topics
 from bot.middlewares.logging import LoggingMiddleware
+from bot.middlewares.nick_gate import NickGateMiddleware
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
 from bot.services.stats_service import StatsService
@@ -132,7 +133,7 @@ def build_dispatcher(
     dp["owner_id"]       = owner_id
     # bot_username устанавливается в on_startup / on_startup_polling
 
-    # ── Промежуточный слой ────────────────────────────────────────────────
+    # ── Промежуточный слой (глобальный) ──────────────────────────────────
     dp.update.middleware(LoggingMiddleware())
 
     # ── Временный отладочный роутер (все типы чатов) — удалить после проверки веток
@@ -145,6 +146,10 @@ def build_dispatcher(
     private = Router()
     private.message.filter(F.chat.type == "private")
     private.callback_query.filter(F.message.chat.type == "private")
+
+    # NickGateMiddleware — перед обработчиками, после фильтрации приватных чатов
+    # Блокирует сообщения от пользователей без установленного ника (кроме команд и NickSetup)
+    private.message.middleware(NickGateMiddleware())
 
     # Порядок важен: cancel — первым, перехватывает «❌ Отмена» в любом FSM-состоянии
     private.include_router(cancel.router)

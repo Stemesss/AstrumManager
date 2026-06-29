@@ -4,10 +4,12 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class NickSetup(StatesGroup):
-    """Первичная установка ника (при первом запуске)."""
-    waiting_nick = State()
+    """Первичная настройка профиля (при первом запуске)."""
+    waiting_name    = State()   # ввод имени
+    waiting_confirm = State()   # предпросмотр — ожидание подтверждения
 
 
 class NickChange(StatesGroup):
-    """Смена ника через настройки профиля."""
-    waiting_nick = State()
+    """Смена имени через раздел «👤 Мой профиль»."""
+    waiting_name    = State()   # ввод нового имени
+    waiting_confirm = State()   # предпросмотр — ожидание подтверждения

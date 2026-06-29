@@ -7,19 +7,14 @@ from aiogram.types import Message
 
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
 from bot.services.user_service import UserService
-from bot.utils.profile import SETTINGS_KB, build_profile_card
+from bot.utils.nick_format import build_full_nick
+from bot.utils.profile import PROFILE_KB, build_profile_card
 from bot.utils.roles import role_label
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 _WIP = "🚧 Раздел находится в разработке."
-
-
-# ------------------------------------------------------------------ #
-# Разделы «в разработке»
-# ------------------------------------------------------------------ #
-
 
 
 @router.message(F.text == BTN.MEMBERS)
@@ -37,8 +32,8 @@ async def handle_members(message: Message, user_service: UserService) -> None:
     await message.answer("\n".join(lines))
 
 
-@router.message(F.text == BTN.SETTINGS)
-async def handle_settings(message: Message, user_service: UserService) -> None:
+@router.message(F.text == BTN.PROFILE)
+async def handle_profile(message: Message, user_service: UserService) -> None:
     """Показывает карточку профиля пользователя."""
     if not message.from_user:
         return
@@ -47,10 +42,10 @@ async def handle_settings(message: Message, user_service: UserService) -> None:
     role = await user_service.get_role(message.from_user.id)
     stats = await user_service.get_profile_stats(message.from_user.id)
 
-    nick_str = user.game_nick or "<i>не задан</i>"
+    name = user.game_nick or ""
     await message.answer(
-        build_profile_card(nick_str, role, stats),
-        reply_markup=SETTINGS_KB,
+        build_profile_card(name, role, stats),
+        reply_markup=PROFILE_KB,
     )
 
 
@@ -70,7 +65,7 @@ async def handle_help_button(message: Message) -> None:
         "👥 <b>Участники</b> — состав клана\n"
         "🛡️ <b>Администрация</b> — для Лидеров, Дитя клана и Старейшин\n"
         "📈 <b>Статистика</b> — центр статистики клана\n"
-        "⚙️ <b>Настройки</b> — ваш профиль\n\n"
+        "👤 <b>Мой профиль</b> — ваш профиль и смена имени\n\n"
         "По всем вопросам обращайтесь к администраторам клана.",
         reply_markup=MAIN_KEYBOARD,
     )

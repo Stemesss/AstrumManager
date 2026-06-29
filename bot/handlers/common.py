@@ -11,6 +11,7 @@ from aiogram.types import Message
 from bot.keyboards.main_menu import MAIN_KEYBOARD
 from bot.services.user_service import UserService
 from bot.states.nick import NickSetup
+from bot.utils.nick_format import build_full_nick
 from bot.utils.text import greeting_by_hour
 
 router = Router()
@@ -18,17 +19,25 @@ logger = logging.getLogger(__name__)
 
 _MSK = timezone(timedelta(hours=3))
 
-_WELCOME_NEW = (
-    "🌌 <b>Добро пожаловать в Astrum!</b>\n\n"
-    "Твой профиль успешно создан.\n\n"
-    "🎖 <b>Роль:</b> 👤 Участник\n\n"
-    "Тебе доступны:\n"
-    "📖 Просмотр новостей\n"
-    "📚 Просмотр гайдов\n"
-    "📸 Просмотр скриншотов\n"
-    "📅 Просмотр событий\n"
-    "👤 Личный профиль\n\n"
-    "Приятной игры!"
+# Приглашение к первичной настройке профиля
+_SETUP_WELCOME = (
+    "👋 <b>Добро пожаловать в Astrum!</b>\n\n"
+    "Перед началом необходимо настроить ваш профиль.\n\n"
+    "🎮 <b>Введите ваше игровое имя:</b>\n\n"
+    "• от 3 до 20 символов\n"
+    "• только буквы, цифры, пробел, дефис\n"
+    "• без эмодзи и спецсимволов\n"
+    "• только имя, без титулов\n\n"
+    "Например: <code>Вадим</code>"
+)
+
+_SETUP_RETURN = (
+    "⚜️ <b>AstrumManager</b>\n\n"
+    "🎮 <b>Укажите игровое имя</b> для продолжения:\n\n"
+    "• от 3 до 20 символов\n"
+    "• только буквы, цифры, пробел, дефис\n"
+    "• без эмодзи и спецсимволов\n"
+    "• только имя, без титулов"
 )
 
 
@@ -43,13 +52,13 @@ async def handle_start(
     Обрабатывает /start и deep-link /start join.
 
     Новый пользователь:
-      - создать профиль → записать в audit_log → показать welcome → главное меню.
-
-    Существующий пользователь с ником:
-      - приветствие по времени суток + главное меню.
+      → запуск мастера первичной настройки профиля (NickSetup).
 
     Существующий пользователь без ника:
-      - FSM NickSetup (запрос игрового ника).
+      → повторный запуск мастера настройки.
+
+    Существующий пользователь с ником:
+      → приветствие по времени суток + главное меню.
     """
     if not message.from_user:
         return
@@ -59,45 +68,39 @@ async def handle_start(
     deep_join = (command.args or "").strip().lower() == "join"
     user, is_new = await user_service.register_if_new(message.from_user)
 
-    # ── Новый пользователь (или deep-link ?start=join) ──────────────────────
+    # ── Новый пользователь → мастер первичной настройки ─────────────────────
     if is_new or deep_join:
         logger.info(
-            "Новый участник %s (deep_join=%s) — регистрация",
+            "Новый участник %s (deep_join=%s) — запуск мастера настройки профиля",
             user.telegram_id, deep_join,
         )
-        await user_service.log_registration(user)
-        await message.answer(_WELCOME_NEW)
-        await message.answer(
-            "⚜️ <b>AstrumManager</b>  •  Главное меню",
-            reply_markup=MAIN_KEYBOARD,
-        )
+        await state.set_state(NickSetup.waiting_name)
+        await message.answer(_SETUP_WELCOME)
         return
 
-    # ── Существующий пользователь без ника — запрос ника (FSM) ─────────────
+    # ── Существующий пользователь без ника — повторный запуск мастера ───────
     if not user.game_nick:
-        await state.set_state(NickSetup.waiting_nick)
-        logger.info("Пользователь %s без ника — запрос игрового ника", user.telegram_id)
-        await message.answer(
-            "⚜️ <b>AstrumManager</b>\n\n"
-            "👋 Добро пожаловать!\n\n"
-            "Для использования бота укажите игровой ник.\n\n"
-            "Напишите ник одним сообщением, например:\n"
-            "<code>Stemess</code>\n\n"
-            "<b>Введите ник:</b>",
+        await state.set_state(NickSetup.waiting_name)
+        logger.info(
+            "Пользователь %s без ника — запуск мастера настройки профиля",
+            user.telegram_id,
         )
+        await message.answer(_SETUP_RETURN)
         return
 
-    # ── Существующий пользователь с ником — приветствие ────────────────────
+    # ── Существующий пользователь с ником — приветствие ─────────────────────
     now = datetime.now(_MSK)
     header, greeting_word, emoji = greeting_by_hour(now.hour)
+    role = await user_service.get_role(user.telegram_id)
+    full_nick = build_full_nick(user.game_nick, role)
 
     logger.info(
         "Пользователь %s (%s) запустил бота — %s (МСК %02d:xx)",
-        user.telegram_id, user.game_nick, greeting_word, now.hour,
+        user.telegram_id, full_nick, greeting_word, now.hour,
     )
     await message.answer(
         f"⚜️ <b>AstrumManager</b>  •  {header}\n\n"
-        f"{greeting_word}, <b>{user.game_nick}</b>! {emoji}\n\n"
+        f"{greeting_word}, <b>{full_nick}</b>! {emoji}\n\n"
         "Рады снова видеть тебя в сообществе Astrum.\n\n"
         "Выберите нужный раздел ниже.",
         reply_markup=MAIN_KEYBOARD,

@@ -16,7 +16,7 @@ class BTN:
     ADMIN       = "🛡️ Администрация"
     AUDIT       = "📋 Журнал действий"
     STATS       = "📈 Статистика"
-    SETTINGS    = "⚙️ Настройки"
+    PROFILE     = "👤 Мой профиль"
     HELP        = "❓ Помощь"
 
 
@@ -28,7 +28,7 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
         [KeyboardButton(text=BTN.COMPLAINTS)],
         [KeyboardButton(text=BTN.MEMBERS),    KeyboardButton(text=BTN.ADMIN)],
         [KeyboardButton(text=BTN.AUDIT),      KeyboardButton(text=BTN.STATS)],
-        [KeyboardButton(text=BTN.SETTINGS),   KeyboardButton(text=BTN.HELP)],
+        [KeyboardButton(text=BTN.PROFILE),    KeyboardButton(text=BTN.HELP)],
     ],
     resize_keyboard=True,
 )
