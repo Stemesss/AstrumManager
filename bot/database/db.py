@@ -47,6 +47,12 @@ class Database:
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.execute(_CREATE_USERS)
         await self._conn.execute(_CREATE_NEWS)
+        # Миграция: добавляем game_nick для существующих БД (игнорируем если уже есть)
+        try:
+            await self._conn.execute("ALTER TABLE users ADD COLUMN game_nick TEXT")
+            logger.info("Миграция: столбец game_nick добавлен в таблицу users")
+        except Exception:
+            pass  # Столбец уже существует
         await self._conn.commit()
         logger.info("База данных подключена: %s", self._path)
 
@@ -99,6 +105,14 @@ class Database:
         """Устанавливает роль пользователя."""
         await self.conn.execute(
             "UPDATE users SET role = ? WHERE telegram_id = ?", (role, telegram_id)
+        )
+        await self.conn.commit()
+
+    async def set_game_nick(self, telegram_id: int, game_nick: str) -> None:
+        """Устанавливает или обновляет игровой ник пользователя."""
+        await self.conn.execute(
+            "UPDATE users SET game_nick = ? WHERE telegram_id = ?",
+            (game_nick, telegram_id),
         )
         await self.conn.commit()
 

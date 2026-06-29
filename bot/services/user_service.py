@@ -19,12 +19,13 @@ class UserService:
             username=tg_user.username,
             first_name=tg_user.first_name or "Пользователь",
         )
-        role_str = await self._db.get_role(tg_user.id)
+        row = await self._db.get_user(tg_user.id)
         return User(
             telegram_id=tg_user.id,
             username=tg_user.username,
             first_name=tg_user.first_name or "Пользователь",
-            role=UserRole.from_str(role_str),
+            role=UserRole.from_str(row["role"]) if row else UserRole.MEMBER,
+            game_nick=row["game_nick"] if row else None,
         )
 
     async def get_role(self, telegram_id: int) -> UserRole:
@@ -40,6 +41,20 @@ class UserService:
     async def set_role(self, telegram_id: int, role: UserRole) -> None:
         """Устанавливает роль пользователя."""
         await self._db.set_role(telegram_id, role.value)
+
+    async def has_nick(self, telegram_id: int) -> bool:
+        """True если пользователь уже установил игровой ник."""
+        row = await self._db.get_user(telegram_id)
+        return bool(row and row["game_nick"])
+
+    async def set_game_nick(self, telegram_id: int, nick: str) -> None:
+        """Устанавливает или обновляет игровой ник пользователя."""
+        await self._db.set_game_nick(telegram_id, nick)
+
+    async def get_game_nick(self, telegram_id: int) -> str | None:
+        """Возвращает игровой ник или None."""
+        row = await self._db.get_user(telegram_id)
+        return row["game_nick"] if row else None
 
     async def get_profile_stats(self, telegram_id: int) -> dict:
         """Возвращает статистику профиля: дней в клане, гайдов, скриншотов."""
@@ -59,6 +74,7 @@ class UserService:
                 username=row["username"],
                 first_name=row["first_name"],
                 role=UserRole.from_str(row["role"]),
+                game_nick=row["game_nick"],
             )
             for row in rows
         ]

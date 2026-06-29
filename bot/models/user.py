@@ -32,3 +32,4 @@ class User:
     username: str | None
     first_name: str
     role: UserRole = UserRole.MEMBER
+    game_nick: str | None = None

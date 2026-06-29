@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, common, echo, menu, news, setrole
+from bot.handlers import admin, common, echo, menu, news, nick, setrole
 from bot.middlewares.logging import LoggingMiddleware
 from bot.services.news_service import NewsService
 from bot.services.user_service import UserService
@@ -93,6 +93,7 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     # Порядок важен: специализированные роутеры до универсального echo
     dp.include_router(common.router)
     dp.include_router(setrole.router)
+    dp.include_router(nick.router)   # FSM ника — до menu/news, чтобы перехватывать NickSetup/NickChange
     dp.include_router(news.router)
     dp.include_router(admin.router)
     dp.include_router(menu.router)

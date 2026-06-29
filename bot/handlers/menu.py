@@ -3,7 +3,7 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
 from bot.services.user_service import UserService
@@ -13,6 +13,10 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 _WIP = "🚧 Раздел находится в разработке."
+
+_SETTINGS_KB = InlineKeyboardMarkup(inline_keyboard=[[
+    InlineKeyboardButton(text="✏️ Изменить ник", callback_data="nick:change"),
+]])
 
 
 # ------------------------------------------------------------------ #
@@ -48,8 +52,8 @@ async def handle_members(message: Message, user_service: UserService) -> None:
 
     lines = [f"👥 <b>Участники клана Astrum</b> ({len(users)})\n"]
     for u in users:
-        name = f"@{u.username}" if u.username else u.first_name
-        lines.append(f"• {name} — {role_label(u.role)}")
+        display = u.game_nick or u.first_name
+        lines.append(f"• {display} — {role_label(u.role)}")
     await message.answer("\n".join(lines))
 
 
@@ -63,7 +67,7 @@ async def handle_settings(message: Message, user_service: UserService) -> None:
     role = await user_service.get_role(message.from_user.id)
     stats = await user_service.get_profile_stats(message.from_user.id)
 
-    username_str = f"@{user.username}" if user.username else "не задан"
+    nick_str = user.game_nick or "<i>не задан</i>"
 
     await message.answer(
         "━━━━━━━━━━━━━━━━━━━━\n"
@@ -71,8 +75,7 @@ async def handle_settings(message: Message, user_service: UserService) -> None:
         "👤 <b>Профиль пользователя</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👤 <b>Имя:</b> {user.first_name}\n"
-        f"🔗 <b>Username:</b> {username_str}\n"
-        f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>\n\n"
+        f"🎮 <b>Ник:</b> {nick_str}\n\n"
         f"🏅 <b>Роль:</b> {role_label(role)}\n\n"
         f"📅 <b>В клане:</b> {stats['days_in_clan']} дней\n"
         f"📚 <b>Создано гайдов:</b> {stats['guides_count']}\n"
@@ -80,7 +83,7 @@ async def handle_settings(message: Message, user_service: UserService) -> None:
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "🟢 <b>Статус:</b> Активен\n"
         "━━━━━━━━━━━━━━━━━━━━",
-        reply_markup=MAIN_KEYBOARD,
+        reply_markup=_SETTINGS_KB,
     )
 
 
