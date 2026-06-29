@@ -19,11 +19,6 @@ _WIP = "🚧 Раздел находится в разработке."
 # Разделы «в разработке»
 # ------------------------------------------------------------------ #
 
-@router.message(F.text == BTN.NEWS)
-async def handle_news(message: Message) -> None:
-    """Раздел новостей клана."""
-    await message.answer(f"📰 <b>Новости</b>\n\n{_WIP}")
-
 
 @router.message(F.text == BTN.EVENTS)
 async def handle_events(message: Message) -> None:

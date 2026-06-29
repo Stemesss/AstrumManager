@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
 """Пакет обработчиков команд и сообщений."""
-from bot.handlers import admin, common, echo, menu, setrole
+from bot.handlers import admin, common, echo, menu, news, setrole
 
-__all__ = ["common", "echo", "menu", "admin", "setrole"]
+__all__ = ["common", "echo", "menu", "admin", "setrole", "news"]

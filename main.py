@@ -13,8 +13,9 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, common, echo, menu, setrole
+from bot.handlers import admin, common, echo, menu, news, setrole
 from bot.middlewares.logging import LoggingMiddleware
+from bot.services.news_service import NewsService
 from bot.services.user_service import UserService
 
 WEBHOOK_PATH = "/api/telegram/webhook"
@@ -80,7 +81,9 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
 
     # Внедряем сервисы в контекст всех обработчиков
     user_service = UserService(db)
+    news_service = NewsService(db)
     dp["user_service"] = user_service
+    dp["news_service"] = news_service
     dp["db"] = db
     dp["owner_id"] = owner_id
 
@@ -90,6 +93,7 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     # Порядок важен: специализированные роутеры до универсального echo
     dp.include_router(common.router)
     dp.include_router(setrole.router)
+    dp.include_router(news.router)
     dp.include_router(admin.router)
     dp.include_router(menu.router)
     dp.include_router(echo.router)
