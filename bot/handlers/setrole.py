@@ -2,7 +2,7 @@
 """Обработчик команды /setrole — назначение роли участнику клана."""
 import logging
 
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
@@ -11,6 +11,7 @@ from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
 from bot.services.user_service import UserService
 from bot.utils.roles import ROLE_ORDER, role_label
+from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -26,9 +27,11 @@ _USAGE = (
 @router.message(Command("setrole"))
 async def handle_setrole(
     message: Message,
+    bot: Bot,
     user_service: UserService,
     audit_service: AuditService,
     owner_id: int | None,
+    group_chat_id: int,
 ) -> None:
     """Назначает роль пользователю. Доступно только владельцу бота."""
     if not message.from_user:
@@ -81,8 +84,8 @@ async def handle_setrole(
     )
 
     # Журнал: смена роли
-    actor_nick = await user_service.get_game_nick(message.from_user.id) or "Владелец"
-    actor_role = await user_service.get_role(message.from_user.id)
+    actor_nick  = await user_service.get_game_nick(message.from_user.id) or "Владелец"
+    actor_role  = await user_service.get_role(message.from_user.id)
     target_nick = await user_service.get_game_nick(target_id) or str(target_id)
 
     await audit_service.log(
@@ -96,8 +99,20 @@ async def handle_setrole(
         ),
     )
 
+    # Синхронизация Telegram Admin Title
+    tg_error = await sync_admin_title(bot, group_chat_id, target_id, confirmed)
+
+    # Формируем строку о синхронизации
+    if tg_error:
+        tg_note = f"\n\n{tg_error}"
+    elif confirmed in ADMIN_TITLES:
+        tg_note = f"\n\n✅ Telegram-титул установлен: «{ADMIN_TITLES[confirmed]}»"
+    else:
+        tg_note = "\n\n✅ Telegram-титул снят (роль Участник)."
+
     await message.answer(
         f"✅ Роль успешно изменена.\n\n"
         f"Пользователь: <code>{target_id}</code>\n"
         f"Новая роль: {role_label(confirmed)}"
+        f"{tg_note}"
     )

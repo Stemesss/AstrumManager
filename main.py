@@ -107,9 +107,10 @@ def build_dispatcher(
     dp["news_service"]  = news_service
     dp["audit_service"] = audit_service
     dp["stats_service"] = stats_service
-    dp["topic_service"] = topic_service
-    dp["db"]       = db
-    dp["owner_id"] = owner_id
+    dp["topic_service"]  = topic_service
+    dp["group_chat_id"]  = group_chat_id or -1004463841801
+    dp["db"]             = db
+    dp["owner_id"]       = owner_id
     # bot_username устанавливается в on_startup / on_startup_polling
 
     # ── Промежуточный слой ────────────────────────────────────────────────

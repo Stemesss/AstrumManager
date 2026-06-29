@@ -8,7 +8,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.models.user import UserRole
-from bot.utils.roles import role_label
+from bot.utils.roles import role_display
 from bot.utils.text import pluralize_days
 
 SETTINGS_KB = InlineKeyboardMarkup(inline_keyboard=[[
@@ -24,7 +24,7 @@ def build_profile_card(nick_str: str, role: UserRole, stats: dict) -> str:
         "👤 <b>Профиль пользователя</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🎮 <b>Ник:</b> {nick_str}\n\n"
-        f"🏅 <b>Роль:</b> {role_label(role)}\n\n"
+        f"🎖 <b>Роль Astrum:</b> {role_display(role)}\n\n"
         f"📅 <b>В клане:</b> {pluralize_days(stats['days_in_clan'])}\n"
         f"📚 <b>Создано гайдов:</b> {stats['guides_count']}\n"
         f"📸 <b>Загружено скриншотов:</b> {stats['screenshots_count']}\n\n"
