@@ -231,28 +231,6 @@ async def cb_screenshots(
     )
 
 
-@router.callback_query(F.data == AdminBtn.MEMBERS)
-async def cb_members(callback: CallbackQuery, user_service: UserService) -> None:
-    await _wip_callback(callback, user_service, "👥 Управление участниками")
-
-
-@router.callback_query(F.data == AdminBtn.ROLES)
-async def cb_roles(callback: CallbackQuery, user_service: UserService) -> None:
-    role = await _check_admin(callback, user_service)
-    if role is None:
-        return
-    await callback.answer()
-    await callback.message.answer(
-        "🎖️ <b>Управление ролями</b>\n\n"
-        "Чтобы изменить роль участника, используйте команду:\n\n"
-        "<code>/setrole @username роль</code>\n\n"
-        "Доступные роли:\n"
-        "👑 Лидер\n"
-        "⭐ Дитя клана\n"
-        "🛡️ Старейшина\n"
-        "👤 Участник"
-    )
-
 
 @router.callback_query(F.data == AdminBtn.AUDIT)
 async def cb_audit(callback: CallbackQuery, user_service: UserService) -> None:

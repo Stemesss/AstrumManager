@@ -28,7 +28,6 @@ ADMIN_PANEL_KB = InlineKeyboardMarkup(
         ],
         [
             InlineKeyboardButton(text="👥 Участники",           callback_data=AdminBtn.MEMBERS),
-            InlineKeyboardButton(text="🎖️ Управление ролями",   callback_data=AdminBtn.ROLES),
         ],
         [
             InlineKeyboardButton(text="📋 Журнал действий",     callback_data=AdminBtn.AUDIT),
