@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, audit, common, complaints, content, debug, echo, group, members, menu, news, nick, publish, rules, setrole, stats, statistics, topics
+from bot.handlers import admin, audit, cancel, common, complaints, content, debug, echo, group, members, menu, news, nick, publish, rules, setrole, stats, statistics, topics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
@@ -127,7 +127,8 @@ def build_dispatcher(
     private.message.filter(F.chat.type == "private")
     private.callback_query.filter(F.message.chat.type == "private")
 
-    # Порядок важен: специализированные роутеры до универсального echo
+    # Порядок важен: cancel — первым, перехватывает «❌ Отмена» в любом FSM-состоянии
+    private.include_router(cancel.router)
     private.include_router(common.router)
     private.include_router(setrole.router)
     private.include_router(nick.router)    # FSM ника — до menu/news

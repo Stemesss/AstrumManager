@@ -16,11 +16,12 @@ Callback-схема:
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.database.db import Database
+from bot.keyboards.nav import CANCEL_KB
 from bot.keyboards.complaints import (
     PAGE_SIZE,
     complaint_delete_confirm_kb,
@@ -100,8 +101,8 @@ async def cb_create(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     await callback.message.answer(
         f"📝 <b>Создание обращения</b>\n\n"
-        f"Введите <b>тему обращения</b> (до {_MAX_TITLE} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
+        f"Введите <b>тему обращения</b> (до {_MAX_TITLE} символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -117,8 +118,8 @@ async def fsm_complaint_title(message: Message, state: FSMContext) -> None:
     await state.update_data(title=title)
     await state.set_state(ComplaintCreate.waiting_content)
     await message.answer(
-        f"📝 Теперь введите <b>текст обращения</b> (до {_MAX_CONTENT} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
+        f"📝 Теперь введите <b>текст обращения</b> (до {_MAX_CONTENT} символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -297,8 +298,8 @@ async def cb_reply(callback: CallbackQuery, user_service: UserService, state: FS
     await callback.answer()
     await callback.message.answer(
         f"💬 Введите <b>ответ администрации</b> для обращения #{complaint_id} "
-        f"(до {_MAX_REPLY} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
+        f"(до {_MAX_REPLY} символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -392,12 +393,3 @@ async def cb_delete(
     )
 
 
-# ── Отмена FSM ────────────────────────────────────────────────────────────────
-
-@router.message(
-    Command("cancel"),
-    StateFilter(ComplaintCreate.waiting_title, ComplaintCreate.waiting_content, ComplaintReply.waiting_reply),
-)
-async def handle_cancel(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    await message.answer("❌ Действие отменено.", reply_markup=MAIN_KEYBOARD)

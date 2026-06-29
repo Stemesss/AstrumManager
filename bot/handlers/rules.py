@@ -14,11 +14,12 @@ Callback-схема:
 import logging
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.keyboards.nav import CANCEL_KB
 from bot.keyboards.rules import rules_cancel_kb, rules_view_kb
 from bot.models.audit import AuditAction
 from bot.models.user import UserRole
@@ -114,9 +115,9 @@ async def cb_edit(callback: CallbackQuery, user_service: UserService, state: FSM
     await state.update_data(rules_id=rules_id)
     await callback.answer()
     await callback.message.answer(
-        f"✏️ Введите <b>новый текст правил</b> (до {_MAX_CONTENT} символов):\n\n"
-        "<i>Текущие правила будут обновлены. Отправьте /cancel для отмены.</i>",
-        reply_markup=rules_cancel_kb(),
+        f"✏️ Введите <b>новый текст правил</b> (до {_MAX_CONTENT} символов).\n"
+        "Текущие правила будут обновлены.",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -173,9 +174,8 @@ async def cb_new(callback: CallbackQuery, user_service: UserService, state: FSMC
     await callback.answer()
     await callback.message.answer(
         "✅ <b>Новая редакция правил</b>\n\n"
-        "Введите <b>заголовок</b> (например: «Правила клана Astrum»):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
-        reply_markup=MAIN_KEYBOARD,
+        "Введите <b>заголовок</b> (например: «Правила клана Astrum»):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -235,9 +235,3 @@ async def cb_pin(
         await callback.answer("⚠️ Не удалось опубликовать в тему. Проверьте настройки.", show_alert=True)
 
 
-# ── Отмена FSM ────────────────────────────────────────────────────────────────
-
-@router.message(Command("cancel"), StateFilter(RulesEdit.waiting_content))
-async def handle_cancel(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    await message.answer("❌ Редактирование отменено.", reply_markup=MAIN_KEYBOARD)

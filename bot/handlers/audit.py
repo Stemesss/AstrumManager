@@ -9,7 +9,7 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -20,6 +20,7 @@ from bot.keyboards.audit import (
     audit_search_result_kb,
 )
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.keyboards.nav import CANCEL_KB
 from bot.models.audit import CATEGORY_LABELS
 from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
@@ -155,8 +156,8 @@ async def cb_audit_search_start(
         "Введите один из вариантов:\n"
         "• Игровой ник — например: <code>ProGamer</code>\n"
         "• Тип действия — например: <code>news_create</code>\n"
-        "• Дата — например: <code>12.06.2026</code>\n\n"
-        "<i>/cancel для отмены</i>",
+        "• Дата — например: <code>12.06.2026</code>",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -189,10 +190,6 @@ async def fsm_audit_search(
     )
 
 
-@router.message(Command("cancel"), StateFilter(AuditSearch.waiting_query))
-async def handle_cancel_search(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    await message.answer("❌ Поиск отменён.", reply_markup=MAIN_KEYBOARD)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

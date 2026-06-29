@@ -9,11 +9,11 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.main_menu import MAIN_KEYBOARD
+from bot.keyboards.nav import CANCEL_KB
 from bot.models.audit import AuditAction
 from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
@@ -96,7 +96,10 @@ async def cb_nick_change(
     """Запускает FSM смены ника из профиля."""
     await state.set_state(NickChange.waiting_nick)
     await callback.answer()
-    await callback.message.answer("Введите новый игровой ник.")
+    await callback.message.answer(
+        "Введите новый игровой ник:",
+        reply_markup=CANCEL_KB,
+    )
 
 
 @router.message(NickChange.waiting_nick)
@@ -147,14 +150,3 @@ async def fsm_nick_change(
     )
 
 
-@router.message(
-    Command("cancel"),
-    StateFilter(NickChange.waiting_nick),
-)
-async def handle_cancel_nick_change(message: Message, state: FSMContext) -> None:
-    """Отменяет смену ника."""
-    await state.clear()
-    await message.answer(
-        "❌ Смена ника отменена.",
-        reply_markup=MAIN_KEYBOARD,
-    )

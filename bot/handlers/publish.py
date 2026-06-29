@@ -17,12 +17,13 @@ import logging
 import re
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.database.db import Database
 from bot.keyboards.main_menu import MAIN_KEYBOARD
+from bot.keyboards.nav import CANCEL_KB
 from bot.keyboards.publish import ATTACH_KB, PREVIEW_KB, PublishBtn
 from bot.models.audit import AuditAction
 from bot.models.user import UserRole
@@ -124,7 +125,6 @@ def _build_attach_prompt(attachments: dict) -> str:
             lines.append(f"  🔗 Ссылки: {lk}")
         lines.append("")
     lines.append("Нажмите <b>✅ Готово</b> для перехода к предпросмотру.")
-    lines.append("<i>Или /cancel для отмены.</i>")
     return "\n".join(lines)
 
 
@@ -201,8 +201,8 @@ async def handle_waiting_title(message: Message, state: FSMContext) -> None:
     await message.answer(
         f"📝 Заголовок сохранён: <b>{title}</b>\n\n"
         f"Теперь введите <b>текст</b> {cfg['label'].lower()}а "
-        f"(до {_MAX_CONTENT} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
+        f"(до {_MAX_CONTENT} символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -473,8 +473,8 @@ async def cb_edit_title(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
         f"✏️ Введите новый <b>заголовок</b> {cfg['label'].lower()}а "
-        f"(до {_MAX_TITLE} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
+        f"(до {_MAX_TITLE} символов):",
+        reply_markup=CANCEL_KB,
     )
     await callback.answer()
 
@@ -489,8 +489,8 @@ async def cb_edit_content(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
         f"📝 Введите новый <b>текст</b> {cfg['label'].lower()}а "
-        f"(до {_MAX_CONTENT} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
+        f"(до {_MAX_CONTENT} символов):",
+        reply_markup=CANCEL_KB,
     )
     await callback.answer()
 
@@ -508,20 +508,3 @@ async def cb_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-# ── /cancel через команду ─────────────────────────────────────────────────────
-
-@router.message(
-    Command("cancel"),
-    StateFilter(
-        PublishWizard.waiting_title,
-        PublishWizard.waiting_content,
-        PublishWizard.waiting_attachments,
-        PublishWizard.preview,
-    ),
-)
-async def handle_cancel(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    await message.answer(
-        "❌ Создание отменено.\n\nВыберите раздел в главном меню.",
-        reply_markup=MAIN_KEYBOARD,
-    )

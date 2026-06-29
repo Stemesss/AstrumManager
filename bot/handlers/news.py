@@ -9,11 +9,12 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.keyboards.nav import CANCEL_KB
 from bot.keyboards.news import (
     news_delete_confirm_kb,
     news_edit_kb,
@@ -178,9 +179,8 @@ async def cb_news_create(
     await callback.answer()
     await callback.message.answer(
         "📰 <b>Создание новости</b>\n\n"
-        f"Введите <b>заголовок</b> новости (до {_MAX_TITLE_LEN} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
-        reply_markup=MAIN_KEYBOARD,
+        f"Введите <b>заголовок</b> новости (до {_MAX_TITLE_LEN} символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -222,8 +222,8 @@ async def cb_edit_title(
     await state.update_data(news_id=news_id)
     await callback.answer()
     await callback.message.answer(
-        f"✏️ Введите <b>новый заголовок</b> (до {_MAX_TITLE_LEN} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
+        f"✏️ Введите <b>новый заголовок</b> (до {_MAX_TITLE_LEN} символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -243,8 +243,8 @@ async def cb_edit_content(
     await state.update_data(news_id=news_id)
     await callback.answer()
     await callback.message.answer(
-        f"📝 Введите <b>новый текст</b> новости (до {_MAX_CONTENT_LEN} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
+        f"📝 Введите <b>новый текст</b> новости (до {_MAX_CONTENT_LEN} символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -443,18 +443,3 @@ async def cb_pin(
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Отмена FSM через /cancel
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.message(
-    Command("cancel"),
-    StateFilter(NewsEdit.waiting_title, NewsEdit.waiting_content),
-)
-async def handle_cancel(message: Message, state: FSMContext) -> None:
-    """Отменяет текущий процесс редактирования новости."""
-    await state.clear()
-    await message.answer(
-        "❌ Действие отменено.\n\nВыберите раздел в главном меню.",
-        reply_markup=MAIN_KEYBOARD,
-    )

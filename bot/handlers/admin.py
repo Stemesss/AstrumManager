@@ -16,6 +16,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards.admin_panel import ADMIN_PANEL_KB, AdminBtn
 from bot.keyboards.audit import audit_menu_kb
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.keyboards.nav import CANCEL_KB
 from bot.models.user import UserRole
 from bot.services.news_service import NewsService
 from bot.services.user_service import UserService
@@ -171,9 +172,8 @@ async def cb_news(
     await callback.answer()
     await callback.message.answer(
         "📰 <b>Создание новости</b>\n\n"
-        "Введите <b>заголовок</b> новости (до 100 символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
-        reply_markup=MAIN_KEYBOARD,
+        "Введите <b>заголовок</b> новости (до 100 символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -189,9 +189,8 @@ async def cb_events(
     await callback.answer()
     await callback.message.answer(
         "📅 <b>Создание события</b>\n\n"
-        "Введите <b>заголовок</b> события (до 100 символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
-        reply_markup=MAIN_KEYBOARD,
+        "Введите <b>заголовок</b> события (до 100 символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -207,9 +206,8 @@ async def cb_guides(
     await callback.answer()
     await callback.message.answer(
         "📚 <b>Создание гайда</b>\n\n"
-        "Введите <b>заголовок</b> гайда (до 100 символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
-        reply_markup=MAIN_KEYBOARD,
+        "Введите <b>заголовок</b> гайда (до 100 символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
@@ -225,9 +223,8 @@ async def cb_screenshots(
     await callback.answer()
     await callback.message.answer(
         "📸 <b>Создание скриншота</b>\n\n"
-        "Введите <b>заголовок</b> скриншота (до 100 символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
-        reply_markup=MAIN_KEYBOARD,
+        "Введите <b>заголовок</b> скриншота (до 100 символов):",
+        reply_markup=CANCEL_KB,
     )
 
 
