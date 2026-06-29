@@ -27,6 +27,7 @@ DEFAULT_THREAD_IDS: dict[str, int] = {
     "screenshots": 34,
     "memes":       35,
     "rules":       58,
+    "welcome":     309,
 }
 
 

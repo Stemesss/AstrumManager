@@ -67,6 +67,7 @@ async def handle_new_member(
     event: ChatMemberUpdated,
     bot: Bot,
     topic_service: TopicService,
+    bot_username: str,
 ) -> None:
     """
     Публикует приветствие в ветку «👋 Приветствие» при вступлении участника.
@@ -101,7 +102,13 @@ async def handle_new_member(
         "Ознакомься с правилами и приятной игры!\n\n"
         "━━━━━━━━━━━━━━━━━━━━"
     )
-    ok = await topic_service.publish(bot, "welcome", text)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="🤖 Запустить AstrumManager",
+            url=f"https://t.me/{bot_username}?start=welcome",
+        )
+    ]])
+    ok = await topic_service.publish(bot, "welcome", text, reply_markup=kb)
     if ok:
         logger.info(
             "Приветствие для %s (%s) опубликовано в группе %s",
