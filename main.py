@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, common, echo, menu
+from bot.handlers import admin, common, echo, menu, setrole
 from bot.middlewares.logging import LoggingMiddleware
 from bot.services.user_service import UserService
 
@@ -74,7 +74,7 @@ async def on_shutdown_polling(db: Database, **_kwargs) -> None:
     await db.close()
 
 
-def build_dispatcher(db: Database) -> Dispatcher:
+def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     """Создаёт диспетчер с маршрутизатором и внедрением зависимостей."""
     dp = Dispatcher()
 
@@ -82,12 +82,14 @@ def build_dispatcher(db: Database) -> Dispatcher:
     user_service = UserService(db)
     dp["user_service"] = user_service
     dp["db"] = db
+    dp["owner_id"] = owner_id
 
     # Промежуточный слой логирования
     dp.update.middleware(LoggingMiddleware())
 
     # Порядок важен: специализированные роутеры до универсального echo
     dp.include_router(common.router)
+    dp.include_router(setrole.router)
     dp.include_router(admin.router)
     dp.include_router(menu.router)
     dp.include_router(echo.router)
@@ -128,7 +130,7 @@ def main() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     db = Database(config.db_path)
-    dp = build_dispatcher(db)
+    dp = build_dispatcher(db, owner_id=config.owner_id)
 
     public_host = resolve_public_host()
 
