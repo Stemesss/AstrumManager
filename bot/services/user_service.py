@@ -3,6 +3,7 @@
 from aiogram.types import User as TgUser
 
 from bot.database.db import Database
+from bot.models.audit import AuditAction
 from bot.models.user import User, UserRole
 
 
@@ -12,6 +13,16 @@ class UserService:
     def __init__(self, db: Database) -> None:
         self._db = db
 
+    def _row_to_user(self, tg_user: TgUser, row) -> User:
+        """Конвертирует строку БД + TgUser в модель User."""
+        return User(
+            telegram_id=tg_user.id,
+            username=tg_user.username,
+            first_name=tg_user.first_name or "Пользователь",
+            role=UserRole.from_str(row["role"]) if row else UserRole.MEMBER,
+            game_nick=row["game_nick"] if row else None,
+        )
+
     async def get_or_create(self, tg_user: TgUser) -> User:
         """Регистрирует пользователя при первом обращении, возвращает модель User."""
         await self._db.upsert_user(
@@ -20,12 +31,32 @@ class UserService:
             first_name=tg_user.first_name or "Пользователь",
         )
         row = await self._db.get_user(tg_user.id)
-        return User(
+        return self._row_to_user(tg_user, row)
+
+    async def register_if_new(self, tg_user: TgUser) -> tuple["User", bool]:
+        """
+        Проверяет наличие пользователя в БД.
+        Если новый — создаёт профиль и возвращает (User, True).
+        Если существующий — обновляет last_seen и возвращает (User, False).
+        """
+        existing = await self._db.get_user(tg_user.id)
+        is_new = existing is None
+        await self._db.upsert_user(
             telegram_id=tg_user.id,
             username=tg_user.username,
             first_name=tg_user.first_name or "Пользователь",
-            role=UserRole.from_str(row["role"]) if row else UserRole.MEMBER,
-            game_nick=row["game_nick"] if row else None,
+        )
+        row = await self._db.get_user(tg_user.id)
+        return self._row_to_user(tg_user, row), is_new
+
+    async def log_registration(self, user: "User") -> None:
+        """Записывает в журнал действий: «Пользователь вступил в клан»."""
+        await self._db.add_audit_log(
+            user_id=user.telegram_id,
+            game_nick=user.first_name,
+            role=user.role.value,
+            action_type=AuditAction.MEMBER_REGISTER,
+            description="👤 Пользователь вступил в клан",
         )
 
     async def get_role(self, telegram_id: int) -> UserRole:

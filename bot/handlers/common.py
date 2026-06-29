@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from aiogram import Router
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -18,27 +18,72 @@ logger = logging.getLogger(__name__)
 
 _MSK = timezone(timedelta(hours=3))
 
+_WELCOME_NEW = (
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "🌌 <b>Добро пожаловать в Astrum!</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n\n"
+    "Твой профиль успешно создан.\n\n"
+    "🎖 <b>Роль:</b>\n"
+    "👤 Участник\n\n"
+    "Теперь тебе доступны:\n\n"
+    "📖 Просмотр новостей\n"
+    "📚 Просмотр гайдов\n"
+    "📸 Просмотр скриншотов\n"
+    "📅 Просмотр событий\n"
+    "👤 Личный профиль\n\n"
+    "Приятной игры!\n\n"
+    "━━━━━━━━━━━━━━━━━━━━"
+)
+
 
 @router.message(CommandStart())
 async def handle_start(
     message: Message,
     user_service: UserService,
     state: FSMContext,
+    command: CommandObject,
 ) -> None:
     """
-    Регистрирует пользователя.
-    - Без ника → запрашивает игровой ник (FSM NickSetup).
-    - С ником → умное приветствие по времени суток + главное меню.
+    Обрабатывает /start и deep-link /start join.
+
+    Новый пользователь:
+      - создать профиль → записать в audit_log → показать welcome → главное меню.
+
+    Существующий пользователь с ником:
+      - приветствие по времени суток + главное меню.
+
+    Существующий пользователь без ника:
+      - FSM NickSetup (запрос игрового ника).
     """
     if not message.from_user:
         return
 
     await state.clear()
-    user = await user_service.get_or_create(message.from_user)
 
+    deep_join = (command.args or "").strip().lower() == "join"
+    user, is_new = await user_service.register_if_new(message.from_user)
+
+    # ── Новый пользователь (или deep-link ?start=join) ──────────────────────
+    if is_new or deep_join:
+        logger.info(
+            "Новый участник %s (deep_join=%s) — регистрация",
+            user.telegram_id, deep_join,
+        )
+        await user_service.log_registration(user)
+        await message.answer(_WELCOME_NEW)
+        await message.answer(
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚜️ <b>AstrumManager</b>\n"
+            "Главное меню\n"
+            "━━━━━━━━━━━━━━━━━━━━",
+            reply_markup=MAIN_KEYBOARD,
+        )
+        return
+
+    # ── Существующий пользователь без ника — запрос ника (FSM) ─────────────
     if not user.game_nick:
         await state.set_state(NickSetup.waiting_nick)
-        logger.info("Новый пользователь %s — запрос игрового ника", user.telegram_id)
+        logger.info("Пользователь %s без ника — запрос игрового ника", user.telegram_id)
         await message.answer(
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚜️ <b>AstrumManager</b>\n"
@@ -52,6 +97,7 @@ async def handle_start(
         )
         return
 
+    # ── Существующий пользователь с ником — приветствие ────────────────────
     now = datetime.now(_MSK)
     header, greeting_word, emoji = greeting_by_hour(now.hour)
 
