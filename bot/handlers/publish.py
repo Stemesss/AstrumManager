@@ -75,6 +75,22 @@ _TYPES: dict[str, dict] = {
         "verb":    "загрузил скриншот",
         "uses_db": True,
     },
+    "memes": {
+        "icon":    "😂",
+        "label":   "Мем",
+        "topic":   "memes",
+        "audit":   AuditAction.MEME_CREATE,
+        "verb":    "опубликовал мем",
+        "uses_db": True,
+    },
+    "rules": {
+        "icon":    "✅",
+        "label":   "Правила",
+        "topic":   "rules",
+        "audit":   AuditAction.RULES_CREATE,
+        "verb":    "опубликовал правила",
+        "uses_db": True,
+    },
 }
 
 # ── Хелперы для вложений ──────────────────────────────────────────────────────

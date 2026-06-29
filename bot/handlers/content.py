@@ -77,6 +77,15 @@ _TYPES: dict[str, dict] = {
         "audit_edit": AuditAction.SCREENSHOT_UPLOAD,
         "audit_del":  AuditAction.SCREENSHOT_DELETE,
     },
+    "memes": {
+        "icon":      "😂",
+        "label":     "Мем",
+        "label_pl":  "Мемы",
+        "label_gen": "мема",
+        "btn":       BTN.MEMES,
+        "audit_edit": AuditAction.MEME_EDIT,
+        "audit_del":  AuditAction.MEME_DELETE,
+    },
 }
 
 
@@ -159,6 +168,11 @@ async def handle_guides(message: Message, news_service: NewsService, user_servic
 @router.message(F.text == BTN.SCREENSHOTS, StateFilter(None))
 async def handle_screenshots(message: Message, news_service: NewsService, user_service: UserService) -> None:
     await _show_list(message, news_service, user_service, "screenshots")
+
+
+@router.message(F.text == BTN.MEMES, StateFilter(None))
+async def handle_memes(message: Message, news_service: NewsService, user_service: UserService) -> None:
+    await _show_list(message, news_service, user_service, "memes")
 
 
 # ── Список (пагинация) ────────────────────────────────────────────────────────

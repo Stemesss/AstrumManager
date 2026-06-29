@@ -31,6 +31,22 @@ class AuditAction:
     SCREENSHOT_UPLOAD = "screenshot_upload"
     SCREENSHOT_DELETE = "screenshot_delete"
 
+    # ── Мемы ──────────────────────────────────────────────────────────────
+    MEME_CREATE = "meme_create"
+    MEME_EDIT   = "meme_edit"
+    MEME_DELETE = "meme_delete"
+
+    # ── Правила ───────────────────────────────────────────────────────────
+    RULES_CREATE = "rules_create"
+    RULES_EDIT   = "rules_edit"
+    RULES_PIN    = "rules_pin"
+
+    # ── Жалобы и предложения ──────────────────────────────────────────────
+    COMPLAINT_CREATE = "complaint_create"
+    COMPLAINT_STATUS = "complaint_status"
+    COMPLAINT_REPLY  = "complaint_reply"
+    COMPLAINT_DELETE = "complaint_delete"
+
 
 # Фильтр action_type для каждой категории (None = без фильтра).
 CATEGORY_ACTIONS: dict[str, list[str] | None] = {
@@ -61,6 +77,22 @@ CATEGORY_ACTIONS: dict[str, list[str] | None] = {
         AuditAction.SCREENSHOT_UPLOAD,
         AuditAction.SCREENSHOT_DELETE,
     ],
+    "memes": [
+        AuditAction.MEME_CREATE,
+        AuditAction.MEME_EDIT,
+        AuditAction.MEME_DELETE,
+    ],
+    "rules": [
+        AuditAction.RULES_CREATE,
+        AuditAction.RULES_EDIT,
+        AuditAction.RULES_PIN,
+    ],
+    "complaints": [
+        AuditAction.COMPLAINT_CREATE,
+        AuditAction.COMPLAINT_STATUS,
+        AuditAction.COMPLAINT_REPLY,
+        AuditAction.COMPLAINT_DELETE,
+    ],
     "all": None,
 }
 
@@ -71,5 +103,8 @@ CATEGORY_LABELS: dict[str, str] = {
     "events":      "📅 События",
     "guides":      "📚 Гайды",
     "screenshots": "📸 Скриншоты",
+    "memes":       "😂 Мемы",
+    "rules":       "✅ Правила",
+    "complaints":  "💡 Жалобы и предложения",
     "all":         "📖 Все записи",
 }

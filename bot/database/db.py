@@ -66,6 +66,21 @@ CREATE TABLE IF NOT EXISTS publication_attachments (
 )
 """
 
+_CREATE_COMPLAINTS = """
+CREATE TABLE IF NOT EXISTS complaints (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    user_name   TEXT    NOT NULL,
+    title       TEXT    NOT NULL,
+    content     TEXT    NOT NULL,
+    status      TEXT    NOT NULL DEFAULT 'new',
+    admin_reply TEXT,
+    replied_by  TEXT,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
 
 class Database:
     """Обёртка над aiosqlite для хранения данных пользователей."""
@@ -85,6 +100,7 @@ class Database:
         await self._conn.execute(_CREATE_AUDIT)
         await self._conn.execute(_CREATE_TOPICS)
         await self._conn.execute(_CREATE_ATTACHMENTS)
+        await self._conn.execute(_CREATE_COMPLAINTS)
         # Миграция: добавляем game_nick для существующих БД (игнорируем если уже есть)
         try:
             await self._conn.execute("ALTER TABLE users ADD COLUMN game_nick TEXT")
@@ -648,3 +664,71 @@ class Database:
             (publication_type, publication_id),
         ) as cur:
             return await cur.fetchall()
+
+    # ------------------------------------------------------------------ #
+    # Методы работы с жалобами и предложениями
+    # ------------------------------------------------------------------ #
+
+    async def complaint_create(
+        self, user_id: int, user_name: str, title: str, content: str
+    ) -> int:
+        """Создаёт обращение и возвращает его ID."""
+        async with self.conn.execute(
+            """
+            INSERT INTO complaints (user_id, user_name, title, content)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, user_name, title, content),
+        ) as cur:
+            row_id = cur.lastrowid
+        await self.conn.commit()
+        return row_id  # type: ignore[return-value]
+
+    async def complaint_get(self, complaint_id: int) -> "aiosqlite.Row | None":
+        """Возвращает обращение по ID или None."""
+        async with self.conn.execute(
+            "SELECT * FROM complaints WHERE id = ?", (complaint_id,)
+        ) as cur:
+            return await cur.fetchone()
+
+    async def complaint_list(self, limit: int = 200) -> list:
+        """Возвращает все обращения, новейшие первыми."""
+        async with self.conn.execute(
+            "SELECT * FROM complaints ORDER BY created_at DESC LIMIT ?", (limit,)
+        ) as cur:
+            return await cur.fetchall()
+
+    async def complaint_list_by_user(self, user_id: int) -> list:
+        """Возвращает обращения конкретного пользователя."""
+        async with self.conn.execute(
+            "SELECT * FROM complaints WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        ) as cur:
+            return await cur.fetchall()
+
+    async def complaint_set_status(self, complaint_id: int, status: str) -> None:
+        """Обновляет статус обращения."""
+        await self.conn.execute(
+            "UPDATE complaints SET status = ?, updated_at = datetime('now') WHERE id = ?",
+            (status, complaint_id),
+        )
+        await self.conn.commit()
+
+    async def complaint_set_reply(
+        self, complaint_id: int, reply: str, replied_by: str
+    ) -> None:
+        """Сохраняет ответ администрации."""
+        await self.conn.execute(
+            """
+            UPDATE complaints
+            SET admin_reply = ?, replied_by = ?, updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (reply, replied_by, complaint_id),
+        )
+        await self.conn.commit()
+
+    async def complaint_delete(self, complaint_id: int) -> None:
+        """Удаляет обращение."""
+        await self.conn.execute("DELETE FROM complaints WHERE id = ?", (complaint_id,))
+        await self.conn.commit()
