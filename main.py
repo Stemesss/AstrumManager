@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, audit, cancel, common, complaints, content, debug, echo, group, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, topics
+from bot.handlers import admin, audit, cancel, common, complaints, content, debug, echo, group, group_nick, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, topics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.middlewares.nick_gate import NickGateMiddleware
 from bot.services.audit_service import AuditService
@@ -141,6 +141,7 @@ def build_dispatcher(
 
     # ── Групповой роутер (группы / супергруппы) ───────────────────────────
     dp.include_router(group.router)
+    dp.include_router(group_nick.router)
 
     # ── Приватный роутер (только личные сообщения) ────────────────────────
     private = Router()
