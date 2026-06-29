@@ -47,15 +47,9 @@ class StatsService:
         result = await self.top_active_users(limit=1)
         return result[0] if result else None
 
-    async def best_of_month(self) -> UserActivity | None:
-        """
-        Участник с максимальным количеством очков за текущий календарный месяц.
-        Формула: news_create=5, guide_create=10, screenshot_upload=2, event_create=8.
-        Возвращает None, если в этом месяце активности не было.
-        """
-        row = await self._db.stats_best_of_month()
-        if row is None:
-            return None
+    @staticmethod
+    def _row_to_activity(row) -> UserActivity:
+        """Преобразует строку БД (stats_best_since) в UserActivity."""
         return UserActivity(
             user_id=int(row["user_id"]),
             game_nick=row["game_nick"] or "—",
@@ -66,6 +60,16 @@ class StatsService:
             screenshots_count=int(row["screenshots_count"] or 0),
             events_count=int(row["events_count"] or 0),
         )
+
+    async def best_of_month(self) -> UserActivity | None:
+        """Участник с максимальными очками за текущий календарный месяц."""
+        row = await self._db.stats_best_of_month()
+        return self._row_to_activity(row) if row else None
+
+    async def best_of_week(self) -> UserActivity | None:
+        """Участник с максимальными очками за последние 7 дней."""
+        row = await self._db.stats_best_of_week()
+        return self._row_to_activity(row) if row else None
 
     # ─────────────────────────────────────────────────────────────────────────
     # Новости

@@ -61,11 +61,11 @@ async def _check_admin(callback: CallbackQuery, user_service: UserService) -> bo
     return True
 
 
-def _fmt_best_of_month(u: UserActivity) -> str:
-    """Форматирует карточку «Лучший участник месяца»."""
+def _fmt_winner_card(icon: str, title: str, u: UserActivity) -> str:
+    """Универсальная карточка победителя (используется в разных периодах)."""
     return (
         f"{_HEADER}\n"
-        f"🏆 <b>Лучший участник месяца</b>\n"
+        f"{icon} <b>{title}</b>\n"
         f"{_HEADER}\n\n"
         f"👤 Ник:\n{u.game_nick}\n\n"
         f"⭐ Очков:\n{u.score}\n\n"
@@ -73,6 +73,18 @@ def _fmt_best_of_month(u: UserActivity) -> str:
         f"📚 Гайдов:\n{u.guides_count}\n\n"
         f"📸 Скриншотов:\n{u.screenshots_count}\n\n"
         f"📅 Событий:\n{u.events_count}\n\n"
+        f"{_HEADER}"
+    )
+
+
+def _fmt_no_data(icon: str, title: str, period_hint: str) -> str:
+    """Заглушка «нет данных» для карточек победителей."""
+    return (
+        f"{_HEADER}\n"
+        f"{icon} <b>{title}</b>\n"
+        f"{_HEADER}\n\n"
+        f"🚧 Пока недостаточно данных для определения\n"
+        f"{period_hint}\n\n"
         f"{_HEADER}"
     )
 
@@ -131,19 +143,32 @@ async def cb_best_month(
     if not await _check_admin(callback, user_service):
         return
     await callback.answer()
-
     winner = await stats_service.best_of_month()
-    if winner:
-        text = _fmt_best_of_month(winner)
-    else:
-        text = (
-            f"{_HEADER}\n"
-            f"🏆 <b>Лучший участник месяца</b>\n"
-            f"{_HEADER}\n\n"
-            "🚧 Пока недостаточно данных для определения\n"
-            "лучшего участника месяца.\n\n"
-            f"{_HEADER}"
-        )
+    text = (
+        _fmt_winner_card("🏆", "Лучший участник месяца", winner)
+        if winner
+        else _fmt_no_data("🏆", "Лучший участник месяца", "лучшего участника месяца.")
+    )
+    await callback.message.edit_text(text, reply_markup=STATISTICS_SECTION_KB)
+
+
+@router.callback_query(F.data == StatisticsBtn.MOST_ACTIVE_WEEK)
+async def cb_most_active_week(
+    callback: CallbackQuery,
+    user_service: UserService,
+    stats_service: StatsService,
+) -> None:
+    """Показывает карточку самого активного участника за последние 7 дней."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    winner = await stats_service.best_of_week()
+    text = (
+        _fmt_winner_card("🔥", "Самый активный участник недели", winner)
+        if winner
+        else _fmt_no_data("🔥", "Самый активный участник недели",
+                          "самого активного участника недели.")
+    )
     await callback.message.edit_text(text, reply_markup=STATISTICS_SECTION_KB)
 
 
@@ -152,7 +177,6 @@ async def cb_best_month(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.in_({
-    StatisticsBtn.MOST_ACTIVE_WEEK,
     StatisticsBtn.TOP10,
     StatisticsBtn.NEWS,
     StatisticsBtn.GUIDES,

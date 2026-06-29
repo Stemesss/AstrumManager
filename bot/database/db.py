@@ -433,13 +433,13 @@ class Database:
         async with self.conn.execute(sql, (f"-{days - 1}",)) as cur:
             return await cur.fetchall()
 
-    async def stats_best_of_month(self) -> aiosqlite.Row | None:
+    async def _stats_best_since(self, since_expr: str) -> aiosqlite.Row | None:
         """
-        Участник с максимальным количеством очков за текущий календарный месяц.
+        Участник с максимальными очками начиная с `since_expr` (SQLite-выражение).
         Формула: news_create=5, guide_create=10, screenshot_upload=2, event_create=8.
-        Возвращает одну строку или None, если данных нет.
+        since_expr встраивается напрямую — передавать только хардкоженные константы.
         """
-        sql = """
+        sql = f"""
         SELECT
             al.user_id,
             COALESCE(u.game_nick, MAX(al.game_nick)) AS game_nick,
@@ -457,10 +457,18 @@ class Database:
         FROM audit_log al
         LEFT JOIN users u ON u.telegram_id = al.user_id
         WHERE al.action_type IN ('news_create','guide_create','screenshot_upload','event_create')
-          AND al.created_at >= strftime('%Y-%m-01', 'now')
+          AND al.created_at >= {since_expr}
         GROUP BY al.user_id
         ORDER BY score DESC
         LIMIT 1
         """
         async with self.conn.execute(sql) as cur:
             return await cur.fetchone()
+
+    async def stats_best_of_month(self) -> aiosqlite.Row | None:
+        """Победитель текущего календарного месяца."""
+        return await self._stats_best_since("strftime('%Y-%m-01', 'now')")
+
+    async def stats_best_of_week(self) -> aiosqlite.Row | None:
+        """Победитель последних 7 дней."""
+        return await self._stats_best_since("datetime('now', '-6 days')")
