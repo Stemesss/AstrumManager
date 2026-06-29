@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, audit, common, echo, group, menu, news, nick, setrole, stats
+from bot.handlers import admin, audit, common, echo, group, menu, news, nick, setrole, stats, statistics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
@@ -121,6 +121,7 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     private.include_router(news.router)
     private.include_router(admin.router)
     private.include_router(stats.router)
+    private.include_router(statistics.router)
     private.include_router(menu.router)
     private.include_router(echo.router)
 

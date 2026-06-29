@@ -5,14 +5,15 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 class AdminBtn:
     """Callback-данные кнопок панели администрации."""
-    MEMBERS    = "admin:members"
-    ROLES      = "admin:roles"
-    NEWS       = "admin:news"
-    EVENTS     = "admin:events"
-    GUIDES     = "admin:guides"
+    MEMBERS     = "admin:members"
+    ROLES       = "admin:roles"
+    NEWS        = "admin:news"
+    EVENTS      = "admin:events"
+    GUIDES      = "admin:guides"
     SCREENSHOTS = "admin:screenshots"
-    AUDIT      = "admin:audit"
-    SETTINGS   = "admin:settings"
+    AUDIT       = "admin:audit"
+    SETTINGS    = "admin:settings"
+    STATISTICS  = "admin:statistics"
 
 
 ADMIN_PANEL_KB = InlineKeyboardMarkup(
@@ -32,6 +33,9 @@ ADMIN_PANEL_KB = InlineKeyboardMarkup(
         [
             InlineKeyboardButton(text="📋 Журнал действий",     callback_data=AdminBtn.AUDIT),
             InlineKeyboardButton(text="⚙️ Настройки",           callback_data=AdminBtn.SETTINGS),
+        ],
+        [
+            InlineKeyboardButton(text="📈 Центр статистики",    callback_data=AdminBtn.STATISTICS),
         ],
     ]
 )
