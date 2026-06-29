@@ -11,15 +11,18 @@
 """
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message
+
+from bot.services.topic_service import TopicService
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 # Все обработчики этого роутера работают ТОЛЬКО в группах и супергруппах.
 router.message.filter(F.chat.type.in_({"group", "supergroup"}))
+router.chat_member.filter(F.chat.type.in_({"group", "supergroup"}))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -53,3 +56,54 @@ async def group_start(message: Message, bot_username: str) -> None:
         message.from_user.id if message.from_user else "?",
         message.chat.id,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Приветствие новых участников → ветка 👋 Приветствие
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.chat_member()
+async def handle_new_member(
+    event: ChatMemberUpdated,
+    bot: Bot,
+    topic_service: TopicService,
+) -> None:
+    """
+    Публикует приветствие в ветку «👋 Приветствие» при вступлении участника.
+    Если ветка не настроена — отправляет в основной чат.
+    Игнорирует выходы и другие изменения статуса.
+    """
+    old = event.old_chat_member.status
+    new = event.new_chat_member.status
+
+    # Только вступление: left/kicked → member/restricted/administrator/creator
+    joined = old in ("left", "kicked") and new in (
+        "member", "restricted", "administrator", "creator"
+    )
+    if not joined:
+        return
+
+    # Публикуем только в нашей группе (chat_id из конфига)
+    if event.chat.id != topic_service.chat_id:
+        return
+
+    user = event.new_chat_member.user
+    if user.is_bot:
+        return
+
+    mention = f'<a href="tg://user?id={user.id}">{user.full_name}</a>'
+    text = (
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "👋 <b>Новый участник!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"Добро пожаловать в клан Astrum, {mention}! 🌌\n\n"
+        "Рады видеть тебя в нашем сообществе.\n"
+        "Ознакомься с правилами и приятной игры!\n\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
+    ok = await topic_service.publish(bot, "welcome", text)
+    if ok:
+        logger.info(
+            "Приветствие для %s (%s) опубликовано в группе %s",
+            user.full_name, user.id, event.chat.id,
+        )

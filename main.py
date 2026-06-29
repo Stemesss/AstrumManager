@@ -56,6 +56,7 @@ async def on_startup(
     logger = logging.getLogger(__name__)
     dp["bot_start_time"] = datetime.datetime.now(datetime.timezone.utc)
     await db.connect()
+    await dp["topic_service"].seed_default_topics()
     me = await bot.get_me()
     dp["bot_username"] = me.username or ""
     logger.info("Регистрация вебхука → %s", webhook_url)
@@ -75,6 +76,7 @@ async def on_startup_polling(
     import datetime
     dp["bot_start_time"] = datetime.datetime.now(datetime.timezone.utc)
     await db.connect()
+    await dp["topic_service"].seed_default_topics()
     me = await bot.get_me()
     dp["bot_username"] = me.username or ""
     logging.getLogger(__name__).info(
@@ -86,7 +88,11 @@ async def on_shutdown_polling(db: Database, **_kwargs) -> None:
     await db.close()
 
 
-def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
+def build_dispatcher(
+    db: Database,
+    owner_id: int | None = None,
+    group_chat_id: int = -1004463841801,
+) -> Dispatcher:
     """Создаёт диспетчер с разделением приватных и групповых роутеров."""
     dp = Dispatcher()
 
@@ -95,7 +101,7 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     news_service  = NewsService(db)
     audit_service = AuditService(db)
     stats_service = StatsService(db)
-    topic_service = TopicService(db)
+    topic_service = TopicService(db, chat_id=group_chat_id or -1004463841801)
     dp["user_service"]  = user_service
     dp["news_service"]  = news_service
     dp["audit_service"] = audit_service
@@ -171,7 +177,7 @@ def main() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     db = Database(config.db_path)
-    dp = build_dispatcher(db, owner_id=config.owner_id)
+    dp = build_dispatcher(db, owner_id=config.owner_id, group_chat_id=config.group_chat_id)
 
     public_host = resolve_public_host()
 

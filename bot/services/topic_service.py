@@ -3,25 +3,32 @@
 TopicService — управление Telegram Topics (ветками форума).
 
 Использование в обработчиках:
-    thread_id = await topic_service.get_thread_id("news")
-    await bot.send_message(chat_id, text, message_thread_id=thread_id)
-    # thread_id=None → обычный чат (не ветка)
+    await topic_service.publish(bot, "news", text)
+    # thread_id=None → обычный чат (не ветка), без ошибки
 """
 import logging
 
 from aiogram import Bot
+from aiogram.types import InputMediaPhoto
 
 from bot.database.db import Database
-from bot.models.topic import ALL_TOPIC_NAMES, ForumTopic
+from bot.models.topic import ALL_TOPIC_NAMES, DEFAULT_THREAD_IDS, TOPIC_LABELS, ForumTopic
 
 logger = logging.getLogger(__name__)
 
 
 class TopicService:
-    """CRUD для таблицы forum_topics + хелпер отправки в ветку."""
+    """CRUD для таблицы forum_topics + публикация в нужную ветку."""
 
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, chat_id: int) -> None:
         self._db = db
+        self._chat_id = chat_id
+
+    @property
+    def chat_id(self) -> int:
+        return self._chat_id
+
+    # ── Конвертер ─────────────────────────────────────────────────────────────
 
     def _to_model(self, row) -> ForumTopic:
         return ForumTopic(
@@ -29,6 +36,8 @@ class TopicService:
             message_thread_id=row["message_thread_id"],
             enabled=bool(row["enabled"]),
         )
+
+    # ── CRUD ──────────────────────────────────────────────────────────────────
 
     async def set_topic(self, topic_name: str, thread_id: int | None) -> None:
         """Сохраняет (или обновляет) message_thread_id для ветки."""
@@ -42,8 +51,8 @@ class TopicService:
 
     async def get_thread_id(self, topic_name: str) -> int | None:
         """
-        Возвращает message_thread_id для ветки или None.
-        None означает «отправлять в обычный чат».
+        Возвращает message_thread_id или None.
+        None → публиковать в основной чат (без ошибки).
         """
         topic = await self.get_topic(topic_name)
         if topic is None or not topic.enabled:
@@ -51,13 +60,109 @@ class TopicService:
         return topic.message_thread_id
 
     async def list_topics(self) -> list[ForumTopic]:
-        """Список всех настроенных веток."""
+        """Список всех тем (из БД + заглушки для ненастроенных)."""
         rows = await self._db.topic_list()
         configured = {r["topic_name"]: self._to_model(r) for r in rows}
         return [
             configured.get(name, ForumTopic(topic_name=name, message_thread_id=None))
             for name in ALL_TOPIC_NAMES
         ]
+
+    # ── Начальный посев данных ────────────────────────────────────────────────
+
+    async def seed_default_topics(self) -> None:
+        """
+        Заполняет forum_topics значениями по умолчанию.
+        Пропускает темы, уже настроенные администратором через панель.
+        """
+        for name, thread_id in DEFAULT_THREAD_IDS.items():
+            existing = await self._db.topic_get(name)
+            if existing is None:
+                await self._db.topic_set(name, thread_id)
+                logger.info("Посев: ветка '%s' → thread_id=%d", name, thread_id)
+
+    # ── Публикация ────────────────────────────────────────────────────────────
+
+    async def publish(
+        self,
+        bot: Bot,
+        topic_name: str,
+        text: str,
+        **kwargs,
+    ) -> bool:
+        """
+        Публикует текстовое сообщение в нужную ветку (или основной чат).
+        Возвращает True при успехе, False при ошибке доступа.
+        """
+        thread_id = await self.get_thread_id(topic_name)
+        label = TOPIC_LABELS.get(topic_name, topic_name)
+        try:
+            await bot.send_message(
+                chat_id=self._chat_id,
+                text=text,
+                message_thread_id=thread_id,
+                **kwargs,
+            )
+            logger.info(
+                "Публикация '%s' (thread=%s) → chat %s", label, thread_id, self._chat_id
+            )
+            return True
+        except Exception as exc:
+            logger.warning(
+                "Не удалось опубликовать в ветку '%s' (thread=%s, chat=%s): %s",
+                label, thread_id, self._chat_id, exc,
+            )
+            return False
+
+    async def publish_photo(
+        self,
+        bot: Bot,
+        topic_name: str,
+        photo: str,
+        caption: str | None = None,
+        **kwargs,
+    ) -> bool:
+        """Публикует фото в нужную ветку."""
+        thread_id = await self.get_thread_id(topic_name)
+        label = TOPIC_LABELS.get(topic_name, topic_name)
+        try:
+            await bot.send_photo(
+                chat_id=self._chat_id,
+                photo=photo,
+                caption=caption,
+                message_thread_id=thread_id,
+                **kwargs,
+            )
+            return True
+        except Exception as exc:
+            logger.warning(
+                "Не удалось опубликовать фото в ветку '%s': %s", label, exc
+            )
+            return False
+
+    async def publish_media_group(
+        self,
+        bot: Bot,
+        topic_name: str,
+        media: list[InputMediaPhoto],
+        **kwargs,
+    ) -> bool:
+        """Публикует медиагруппу в нужную ветку."""
+        thread_id = await self.get_thread_id(topic_name)
+        label = TOPIC_LABELS.get(topic_name, topic_name)
+        try:
+            await bot.send_media_group(
+                chat_id=self._chat_id,
+                media=media,
+                message_thread_id=thread_id,
+                **kwargs,
+            )
+            return True
+        except Exception as exc:
+            logger.warning(
+                "Не удалось опубликовать медиагруппу в ветку '%s': %s", label, exc
+            )
+            return False
 
     async def safe_send(
         self,
@@ -68,9 +173,8 @@ class TopicService:
         **kwargs,
     ) -> bool:
         """
-        Пробует отправить сообщение в ветку.
-        Если бот не имеет доступа — логирует ошибку и возвращает False.
-        Если ветка не настроена — отправляет в обычный чат.
+        Отправка в произвольный chat_id (не в self._chat_id).
+        Используется для тестов / специальных сценариев.
         """
         thread_id = await self.get_thread_id(topic_name)
         try:
@@ -83,7 +187,7 @@ class TopicService:
             return True
         except Exception as exc:
             logger.warning(
-                "safe_send: не удалось отправить в ветку '%s' (thread=%s): %s",
-                topic_name, thread_id, exc,
+                "safe_send: ветка '%s' (thread=%s, chat=%s): %s",
+                topic_name, thread_id, chat_id, exc,
             )
             return False

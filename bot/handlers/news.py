@@ -8,7 +8,7 @@
 """
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -24,6 +24,7 @@ from bot.models.audit import AuditAction
 from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
+from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 from bot.states.news import NewsCreate, NewsEdit
 from bot.utils.roles import role_label
@@ -216,11 +217,13 @@ async def fsm_news_title(
 async def fsm_news_content(
     message: Message,
     state: FSMContext,
+    bot: Bot,
     news_service: NewsService,
     user_service: UserService,
     audit_service: AuditService,
+    topic_service: TopicService,
 ) -> None:
-    """Принимает текст новости и сохраняет её."""
+    """Принимает текст новости, сохраняет и публикует в ветку 📰 Новости."""
     if not message.text or message.text.startswith("/"):
         await message.answer("⚠️ Пожалуйста, введите текст новости.")
         return
@@ -255,6 +258,7 @@ async def fsm_news_content(
         description=f"{role_label(actor_role)} {actor_nick} создал новость «{title}»",
     )
 
+    # ── Подтверждение администратору ──────────────────────────────────────
     await message.answer(
         f"✅ <b>Новость опубликована!</b>\n\n"
         f"<b>{item.title}</b>\n"
@@ -262,6 +266,20 @@ async def fsm_news_content(
         f"{item.content[:200]}{'…' if len(item.content) > 200 else ''}\n\n"
         f"📅 {_format_date(item.created_at)}",
     )
+
+    # ── Публикация в ветку «📰 Новости» группы ────────────────────────────
+    group_text = (
+        f"📰 <b>{item.title}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{item.content}\n\n"
+        f"📅 {_format_date(item.created_at)}  •  ✍️ {item.author_name}"
+    )
+    ok = await topic_service.publish(bot, "news", group_text)
+    if not ok:
+        await message.answer(
+            "⚠️ Новость сохранена, но <b>не удалось опубликовать в группу</b>.\n"
+            "Проверьте, что бот добавлен в группу и имеет право отправки сообщений."
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

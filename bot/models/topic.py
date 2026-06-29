@@ -9,9 +9,25 @@ TOPIC_LABELS: dict[str, str] = {
     "events":        "📅 События",
     "announcements": "📢 Объявления",
     "welcome":       "👋 Приветствие",
+    "complaints":    "💡 Жалобы и предложения",
+    "memes":         "😂 Мемы",
+    "rules":         "✅ Правила",
 }
 
 ALL_TOPIC_NAMES: list[str] = list(TOPIC_LABELS.keys())
+
+# Значения по умолчанию (chat_id и thread_id из конфига группы Astrum).
+# Используются только при первом запуске; настройки из БД имеют приоритет.
+DEFAULT_CHAT_ID: int = -1004463841801
+DEFAULT_THREAD_IDS: dict[str, int] = {
+    "guides":      2,
+    "complaints":  5,
+    "events":      6,
+    "news":        32,
+    "screenshots": 34,
+    "memes":       35,
+    "rules":       58,
+}
 
 
 @dataclass
