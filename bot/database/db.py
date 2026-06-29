@@ -310,3 +310,125 @@ class Database:
         await self.conn.execute("DELETE FROM audit_log")
         await self.conn.commit()
         return count
+
+    # ------------------------------------------------------------------ #
+    # Методы статистики
+    # ------------------------------------------------------------------ #
+
+    async def stats_top_active_users(self, limit: int = 10) -> list[aiosqlite.Row]:
+        """Топ участников по активности (формула очков из audit_log)."""
+        sql = """
+        SELECT
+            al.user_id,
+            COALESCE(u.game_nick, MAX(al.game_nick)) AS game_nick,
+            MAX(al.role)                              AS role,
+            SUM(CASE al.action_type
+                WHEN 'news_create'       THEN 5
+                WHEN 'guide_create'      THEN 10
+                WHEN 'screenshot_upload' THEN 2
+                WHEN 'event_create'      THEN 8
+                ELSE 0 END)                           AS score,
+            SUM(CASE WHEN al.action_type = 'news_create'       THEN 1 ELSE 0 END) AS news_count,
+            SUM(CASE WHEN al.action_type = 'guide_create'      THEN 1 ELSE 0 END) AS guides_count,
+            SUM(CASE WHEN al.action_type = 'screenshot_upload' THEN 1 ELSE 0 END) AS screenshots_count,
+            SUM(CASE WHEN al.action_type = 'event_create'      THEN 1 ELSE 0 END) AS events_count
+        FROM audit_log al
+        LEFT JOIN users u ON u.telegram_id = al.user_id
+        WHERE al.action_type IN ('news_create','guide_create','screenshot_upload','event_create')
+        GROUP BY al.user_id
+        ORDER BY score DESC
+        LIMIT ?
+        """
+        async with self.conn.execute(sql, (limit,)) as cur:
+            return await cur.fetchall()
+
+    async def stats_count_news(self) -> int:
+        """Общее количество новостей."""
+        async with self.conn.execute("SELECT COUNT(*) FROM news") as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+    async def stats_news_by_author(self, limit: int = 5) -> list[aiosqlite.Row]:
+        """Топ авторов новостей по количеству публикаций."""
+        sql = """
+        SELECT author_id, author_name, COUNT(*) AS count
+        FROM news
+        GROUP BY author_id
+        ORDER BY count DESC
+        LIMIT ?
+        """
+        async with self.conn.execute(sql, (limit,)) as cur:
+            return await cur.fetchall()
+
+    async def stats_news_latest(self) -> aiosqlite.Row | None:
+        """Последняя опубликованная новость (заголовок + дата)."""
+        async with self.conn.execute(
+            "SELECT title, created_at FROM news ORDER BY created_at DESC LIMIT 1"
+        ) as cur:
+            return await cur.fetchone()
+
+    async def stats_content_by_user(
+        self, action_type: str, limit: int = 5
+    ) -> list[aiosqlite.Row]:
+        """Топ участников по заданному типу действий (guide_create, screenshot_upload, event_create)."""
+        sql = """
+        SELECT al.user_id,
+               COALESCE(u.game_nick, MAX(al.game_nick)) AS game_nick,
+               COUNT(*)                                  AS count
+        FROM audit_log al
+        LEFT JOIN users u ON u.telegram_id = al.user_id
+        WHERE al.action_type = ?
+        GROUP BY al.user_id
+        ORDER BY count DESC
+        LIMIT ?
+        """
+        async with self.conn.execute(sql, (action_type, limit)) as cur:
+            return await cur.fetchall()
+
+    async def stats_content_latest(self, action_type: str) -> aiosqlite.Row | None:
+        """Последняя запись заданного типа из audit_log."""
+        async with self.conn.execute(
+            "SELECT game_nick, description, created_at"
+            " FROM audit_log WHERE action_type = ?"
+            " ORDER BY id DESC LIMIT 1",
+            (action_type,),
+        ) as cur:
+            return await cur.fetchone()
+
+    async def stats_count_action(self, action_type: str) -> int:
+        """Количество записей конкретного action_type в audit_log."""
+        async with self.conn.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE action_type = ?", (action_type,)
+        ) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+    async def stats_users_joined(self) -> tuple[int, int, int, int]:
+        """(total, today, week, month) — сколько пользователей вступило."""
+        async with self.conn.execute("SELECT COUNT(*) FROM users") as cur:
+            total = int((await cur.fetchone())[0])
+        async with self.conn.execute(
+            "SELECT COUNT(*) FROM users WHERE date(created_at) = date('now')"
+        ) as cur:
+            today = int((await cur.fetchone())[0])
+        async with self.conn.execute(
+            "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-7 days')"
+        ) as cur:
+            week = int((await cur.fetchone())[0])
+        async with self.conn.execute(
+            "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-30 days')"
+        ) as cur:
+            month = int((await cur.fetchone())[0])
+        return total, today, week, month
+
+    async def stats_users_by_day(self, days: int = 7) -> list[aiosqlite.Row]:
+        """Количество новых пользователей за каждый из последних N дней."""
+        sql = """
+        SELECT date(created_at) AS day, COUNT(*) AS cnt
+        FROM users
+        WHERE created_at >= datetime('now', ? || ' days')
+        GROUP BY day
+        ORDER BY day
+        """
+        async with self.conn.execute(sql, (f"-{days - 1}",)) as cur:
+            return await cur.fetchall()

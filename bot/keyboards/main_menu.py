@@ -12,6 +12,7 @@ class BTN:
     MEMBERS     = "👥 Участники"
     ADMIN       = "🛡️ Администрация"
     AUDIT       = "📋 Журнал действий"
+    STATS       = "📈 Статистика"
     SETTINGS    = "⚙️ Настройки"
     HELP        = "❓ Помощь"
 
@@ -21,8 +22,8 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
         [KeyboardButton(text=BTN.NEWS),    KeyboardButton(text=BTN.EVENTS)],
         [KeyboardButton(text=BTN.GUIDES),  KeyboardButton(text=BTN.SCREENSHOTS)],
         [KeyboardButton(text=BTN.MEMBERS), KeyboardButton(text=BTN.ADMIN)],
-        [KeyboardButton(text=BTN.AUDIT),   KeyboardButton(text=BTN.SETTINGS)],
-        [KeyboardButton(text=BTN.HELP)],
+        [KeyboardButton(text=BTN.AUDIT),   KeyboardButton(text=BTN.STATS)],
+        [KeyboardButton(text=BTN.SETTINGS), KeyboardButton(text=BTN.HELP)],
     ],
     resize_keyboard=True,
 )
