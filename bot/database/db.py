@@ -203,6 +203,39 @@ class Database:
         ) as cur:
             return await cur.fetchall()
 
+    async def delete_user(self, telegram_id: int) -> None:
+        """Удаляет пользователя и все связанные с ним данные."""
+        await self.conn.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
+        await self.conn.execute("DELETE FROM audit_log WHERE user_id = ?", (telegram_id,))
+        await self.conn.execute("DELETE FROM complaints WHERE user_id = ?", (telegram_id,))
+        await self.conn.commit()
+
+    async def season_reset(self) -> tuple[int, int]:
+        """
+        Создаёт резервную копию и сбрасывает сезонные данные:
+        очищает журнал аудита, сохраняет пользователей, темы, новости, жалобы.
+        Возвращает (users_count, logs_deleted).
+        """
+        async with self.conn.execute("SELECT COUNT(*) FROM users") as cur:
+            users_count = int((await cur.fetchone())[0])
+        async with self.conn.execute("SELECT COUNT(*) FROM audit_log") as cur:
+            logs_count = int((await cur.fetchone())[0])
+        await self.conn.execute("DELETE FROM audit_log")
+        await self.conn.commit()
+        return users_count, logs_count
+
+    async def create_backup(self) -> str:
+        """Копирует файл БД в data/backups/. Возвращает путь к резервной копии."""
+        import datetime
+        import shutil
+        backup_dir = os.path.join(os.path.dirname(self._path), "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(backup_dir, f"astrum_{ts}.db")
+        shutil.copy2(self._path, backup_path)
+        logger.info("Резервная копия БД создана: %s", backup_path)
+        return backup_path
+
     # ------------------------------------------------------------------ #
     # Методы работы с новостями
     # ------------------------------------------------------------------ #

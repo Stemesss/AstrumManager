@@ -96,6 +96,10 @@ class UserService:
             "screenshots_count": 0,  # будет заполнено после реализации раздела скриншотов
         }
 
+    async def get_days_in_clan(self, telegram_id: int) -> int:
+        """Возвращает количество дней пользователя в клане."""
+        return await self._db.get_days_in_clan(telegram_id)
+
     async def get_all_users(self) -> list[User]:
         """Возвращает список всех зарегистрированных пользователей."""
         rows = await self._db.get_all_users()
@@ -109,3 +113,34 @@ class UserService:
             )
             for row in rows
         ]
+
+    async def delete_member(self, actor_id: int, target_id: int) -> dict:
+        """
+        Удаляет участника из базы данных.
+        Возвращает {'ok': bool, 'error': str | None}.
+        Запрещено удалять: суперпользователя, самого себя, Лидера.
+        """
+        _SUPERUSER_ID = 8490615925
+        if target_id == _SUPERUSER_ID:
+            return {"ok": False, "error": "Невозможно удалить суперпользователя."}
+        if target_id == actor_id:
+            return {"ok": False, "error": "Нельзя удалить самого себя."}
+        target_role = await self.get_role(target_id)
+        if target_role == UserRole.LEADER:
+            return {"ok": False, "error": "Невозможно удалить владельца проекта (Лидера)."}
+        await self._db.delete_user(target_id)
+        return {"ok": True, "error": None}
+
+    async def new_season(self) -> dict:
+        """
+        Создаёт резервную копию БД, затем сбрасывает сезонные данные:
+        полностью очищает журнал аудита, сохраняя пользователей, роли, темы, новости.
+        Возвращает dict с параметрами отчёта.
+        """
+        backup_path = await self._db.create_backup()
+        users_count, logs_deleted = await self._db.season_reset()
+        return {
+            "backup_path": backup_path,
+            "users_count": users_count,
+            "logs_deleted": logs_deleted,
+        }

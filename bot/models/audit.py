@@ -47,6 +47,10 @@ class AuditAction:
     COMPLAINT_REPLY  = "complaint_reply"
     COMPLAINT_DELETE = "complaint_delete"
 
+    # ── Системные операции ────────────────────────────────────────────────
+    MEMBER_DELETE  = "member_delete"
+    SEASON_RESET   = "season_reset"
+
 
 # Фильтр action_type для каждой категории (None = без фильтра).
 CATEGORY_ACTIONS: dict[str, list[str] | None] = {
@@ -55,6 +59,8 @@ CATEGORY_ACTIONS: dict[str, list[str] | None] = {
         AuditAction.MEMBER_REGISTER,
         AuditAction.MEMBER_ROLE_SET,
         AuditAction.MEMBER_NICK_CHANGE,
+        AuditAction.MEMBER_DELETE,
+        AuditAction.SEASON_RESET,
     ],
     "news": [
         AuditAction.NEWS_CREATE,
