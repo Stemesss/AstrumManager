@@ -50,7 +50,7 @@ from bot.services.stats_service import StatsService
 from bot.services.user_service import UserService
 from bot.states.members import MemberDelete
 from bot.utils.roles import ROLE_ORDER, assignable_roles, can_assign, role_label
-from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
+from bot.utils.sync_title import ADMIN_TITLES, build_admin_title, sync_admin_title
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -304,13 +304,16 @@ async def cb_mem_set(
         actor_id, actor_role.value, confirmed.value, target_id,
     )
 
-    tg_error = await sync_admin_title(bot, group_chat_id, target_id, confirmed)
+    tg_error = await sync_admin_title(
+        bot, group_chat_id, target_id, confirmed, game_nick=target_nick
+    )
 
     icon = _ICONS.get(confirmed, "◇")
     if tg_error:
         tg_note = f"\n\n{tg_error}"
     elif confirmed in ADMIN_TITLES:
-        tg_note = f"\n\n✅ Telegram-титул установлен: «{ADMIN_TITLES[confirmed]}»"
+        actual_title = build_admin_title(confirmed, target_nick)
+        tg_note = f"\n\n✅ Telegram-титул установлен: «{actual_title}»"
     else:
         tg_note = "\n\n✅ Telegram-титул снят."
 

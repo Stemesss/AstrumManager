@@ -9,10 +9,21 @@
 Шаги каждого потока:
   1. waiting_name    — пользователь вводит имя
   2. waiting_confirm — предпросмотр ника, ждём ✅/✏️
+
+После подтверждения:
+  • Имя сохраняется в БД (game_nick).
+  • Для администраторов (Лидер/Воин/Старейшина) автоматически
+    обновляется Telegram Admin Title в групповом чате.
+  • Всем пользователям отправляется подсказка с форматированным
+    ником для самостоятельной установки в Telegram Профиль.
+
+ВАЖНО: Telegram Bot API не позволяет изменять отображаемое имя
+обычного пользователя (first_name/username). Для участников со статусом
+Участник (🌟 Рекрут) бот не может автоматически изменить имя в чате.
 """
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
@@ -29,6 +40,7 @@ from bot.services.user_service import UserService
 from bot.states.nick import NickChange, NickSetup
 from bot.utils.nick_format import build_full_nick, validate_name
 from bot.utils.profile import PROFILE_KB, build_profile_card
+from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -39,6 +51,31 @@ _PREVIEW_KB = InlineKeyboardMarkup(inline_keyboard=[[
     InlineKeyboardButton(text="✅ Подтвердить", callback_data="nick:confirm"),
     InlineKeyboardButton(text="✏️ Изменить",    callback_data="nick:edit"),
 ]])
+
+# ─── Подсказка по копированию ника ───────────────────────────────────────────
+
+_HOW_TO_RENAME = (
+    "Telegram → Настройки → Изменить профиль → Имя"
+)
+
+
+def _copy_hint_kb(full_nick: str) -> InlineKeyboardMarkup:
+    """Кнопка-инструкция для самостоятельной смены имени в Telegram."""
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="📖 Как изменить имя в Telegram",
+            callback_data="nick:how_to_rename",
+        ),
+    ]])
+
+
+def _copy_hint_text(full_nick: str) -> str:
+    return (
+        f"📋 <b>Ваш игровой ник:</b>\n\n"
+        f"<code>{full_nick}</code>\n\n"
+        f"<i>Нажмите на ник выше, чтобы скопировать.</i>"
+    )
+
 
 # ─── Общий промпт для ввода имени ────────────────────────────────────────────
 
@@ -67,6 +104,27 @@ def _preview_text(full_nick: str) -> str:
         f"<b>{full_nick}</b>\n\n"
         "Всё верно?"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Вспомогательная функция: обновить Telegram Admin Title если пользователь — admin
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _try_sync_title(
+    bot: Bot,
+    group_chat_id: int,
+    user_id: int,
+    role: UserRole,
+    name: str,
+) -> str | None:
+    """Обновляет кастомный Telegram-титул для администраторов.
+
+    Для UserRole.MEMBER ничего не делает (Telegram не позволяет).
+    Возвращает None при успехе или строку с предупреждением.
+    """
+    if role not in ADMIN_TITLES:
+        return None  # MEMBER — нет Telegram-привилегий, ничего делать
+    return await sync_admin_title(bot, group_chat_id, user_id, role, game_nick=name)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,8 +162,10 @@ async def cb_setup_confirm(
     state: FSMContext,
     user_service: UserService,
     audit_service: AuditService,
+    bot: Bot,
+    group_chat_id: int,
 ) -> None:
-    """Сохраняет имя, завершает настройку, открывает главное меню."""
+    """Сохраняет имя, обновляет Telegram-титул, завершает настройку."""
     data = await state.get_data()
     name = data.get("pending_name", "")
     await state.clear()
@@ -128,6 +188,11 @@ async def cb_setup_confirm(
         callback.from_user.id, full_nick,
     )
 
+    # Обновить Telegram Admin Title (только для администраторов)
+    tg_error = await _try_sync_title(
+        bot, group_chat_id, callback.from_user.id, role, name
+    )
+
     await callback.message.edit_text(
         f"✅ <b>Профиль настроен!</b>\n\n"
         f"Добро пожаловать в Astrum, <b>{full_nick}</b>! 🎉"
@@ -136,6 +201,16 @@ async def cb_setup_confirm(
         "⚜️ <b>AstrumManager</b>  •  Главное меню",
         reply_markup=MAIN_KEYBOARD,
     )
+
+    # Отправить скопируемый ник
+    await callback.message.answer(
+        _copy_hint_text(full_nick),
+        reply_markup=_copy_hint_kb(full_nick),
+    )
+
+    if tg_error:
+        await callback.message.answer(tg_error)
+
     await callback.answer()
 
 
@@ -196,8 +271,10 @@ async def cb_change_confirm(
     state: FSMContext,
     user_service: UserService,
     audit_service: AuditService,
+    bot: Bot,
+    group_chat_id: int,
 ) -> None:
-    """Сохраняет новое имя, показывает обновлённый профиль."""
+    """Сохраняет новое имя, обновляет Telegram-титул, показывает профиль."""
     data = await state.get_data()
     new_name = data.get("pending_name", "")
 
@@ -223,12 +300,27 @@ async def cb_change_confirm(
         callback.from_user.id, old_name, new_name,
     )
 
+    # Обновить Telegram Admin Title (только для администраторов)
+    tg_error = await _try_sync_title(
+        bot, group_chat_id, callback.from_user.id, role, new_name
+    )
+
     stats = await user_service.get_profile_stats(callback.from_user.id)
     await callback.message.edit_text(
         f"✅ <b>Имя успешно изменено!</b>\n\n"
         + build_profile_card(new_name, role, stats),
         reply_markup=PROFILE_KB,
     )
+
+    # Отправить скопируемый ник
+    await callback.message.answer(
+        _copy_hint_text(new_full),
+        reply_markup=_copy_hint_kb(new_full),
+    )
+
+    if tg_error:
+        await callback.message.answer(tg_error)
+
     await callback.answer()
 
 
@@ -241,3 +333,28 @@ async def cb_change_edit(
     await state.set_state(NickChange.waiting_name)
     await callback.message.edit_text(_CHANGE_PROMPT)
     await callback.answer()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Информационный callback: как изменить имя в Telegram
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "nick:how_to_rename")
+async def cb_how_to_rename(callback: CallbackQuery) -> None:
+    """Объясняет, как вручную установить игровой ник в Telegram."""
+    await callback.answer()
+    await callback.message.answer(
+        "📖 <b>Как изменить отображаемое имя в Telegram</b>\n\n"
+        "Telegram не позволяет боту изменять ваше имя автоматически.\n"
+        "Вы можете сделать это самостоятельно:\n\n"
+        "<b>В приложении Telegram:</b>\n"
+        "Настройки → Изменить профиль → Имя\n\n"
+        "<b>Для администраторов клана</b> (Лидер / Воин / Старейшина):\n"
+        "Ваш Telegram-титул в чате группы обновляется автоматически "
+        "при смене роли или имени. Пример: «Лидер | Вадим».\n\n"
+        "<b>Для Участников (🌟 Рекрут):</b>\n"
+        "Telegram не позволяет добавлять титул к обычным участникам — "
+        "только администраторы получают кастомный титул рядом с именем.\n\n"
+        "💡 Скопируйте ник из сообщения выше и вставьте его в поле «Имя» "
+        "в настройках Telegram.",
+    )
