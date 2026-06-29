@@ -102,6 +102,15 @@ class Database:
         )
         await self.conn.commit()
 
+    async def get_days_in_clan(self, telegram_id: int) -> int:
+        """Возвращает количество дней пользователя в клане (с момента регистрации)."""
+        async with self.conn.execute(
+            "SELECT CAST(julianday('now') - julianday(created_at) AS INTEGER) FROM users WHERE telegram_id = ?",
+            (telegram_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+
     async def get_all_users(self) -> list[aiosqlite.Row]:
         """Возвращает всех пользователей."""
         async with self.conn.execute(

@@ -55,26 +55,32 @@ async def handle_members(message: Message, user_service: UserService) -> None:
 
 @router.message(F.text == BTN.SETTINGS)
 async def handle_settings(message: Message, user_service: UserService) -> None:
-    """Показывает профиль пользователя с актуальной ролью из БД."""
+    """Показывает профиль пользователя с актуальными данными из БД."""
     if not message.from_user:
         return
 
-    # Обновляем last_seen и получаем базовые данные
     user = await user_service.get_or_create(message.from_user)
-    # Читаем роль отдельным запросом — всегда актуальное значение из БД
     role = await user_service.get_role(message.from_user.id)
+    stats = await user_service.get_profile_stats(message.from_user.id)
 
     username_str = f"@{user.username}" if user.username else "не задан"
 
     await message.answer(
-        "⚙️ <b>Настройки профиля</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "⚜️ <b>AstrumManager</b>\n"
+        "👤 <b>Профиль пользователя</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👤 <b>Имя:</b> {user.first_name}\n"
         f"🔗 <b>Username:</b> {username_str}\n"
-        f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>\n"
-        f"🎖 <b>Роль в клане:</b> {role_label(role)}\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{_WIP}",
+        f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>\n\n"
+        f"🏅 <b>Роль:</b> {role_label(role)}\n\n"
+        f"📅 <b>В клане:</b> {stats['days_in_clan']} дней\n"
+        f"📚 <b>Создано гайдов:</b> {stats['guides_count']}\n"
+        f"📸 <b>Загружено скриншотов:</b> {stats['screenshots_count']}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🟢 <b>Статус:</b> Активен\n"
+        "━━━━━━━━━━━━━━━━━━━━",
+        reply_markup=MAIN_KEYBOARD,
     )
 
 

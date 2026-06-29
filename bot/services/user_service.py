@@ -41,6 +41,15 @@ class UserService:
         """Устанавливает роль пользователя."""
         await self._db.set_role(telegram_id, role.value)
 
+    async def get_profile_stats(self, telegram_id: int) -> dict:
+        """Возвращает статистику профиля: дней в клане, гайдов, скриншотов."""
+        days = await self._db.get_days_in_clan(telegram_id)
+        return {
+            "days_in_clan": days,
+            "guides_count": 0,       # будет заполнено после реализации раздела гайдов
+            "screenshots_count": 0,  # будет заполнено после реализации раздела скриншотов
+        }
+
     async def get_all_users(self) -> list[User]:
         """Возвращает список всех зарегистрированных пользователей."""
         rows = await self._db.get_all_users()
