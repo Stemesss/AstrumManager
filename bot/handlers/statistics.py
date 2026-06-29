@@ -6,6 +6,7 @@
   👑 Лидер, ⭐ Дитя клана, 🛡️ Старейшина — полный доступ
   👤 Участник — доступа нет
 """
+import asyncio
 import logging
 
 from aiogram import F, Router
@@ -304,27 +305,122 @@ async def cb_events(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Заглушки для оставшихся WIP-секций
+# ─────────────────────────────────────────────────────────────────────────────
+# 🏆 Топ-10 участников
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.callback_query(F.data.in_({
-    StatisticsBtn.TOP10,
-    StatisticsBtn.GROWTH,
-    StatisticsBtn.HALL_OF_FAME,
-}))
-async def cb_statistics_section(
+def _fmt_top10_card(users: list) -> str:
+    if not users:
+        return f"{_HEADER}\n🏆 <b>Топ-10 участников</b>\n{_HEADER}\n\n🚧 Пока недостаточно данных.\n\n{_HEADER}"
+    lines = "\n".join(
+        f"{i + 1}. {u.game_nick} — {u.score} оч."
+        for i, u in enumerate(users)
+    )
+    formula = (
+        "📌 Очки считаются автоматически по журналу действий.\n"
+        "Формула:\n📰 Новость = 5  📅 Событие = 8\n📚 Гайд = 10  📸 Скриншот = 2"
+    )
+    return f"{_HEADER}\n🏆 <b>Топ-10 участников</b>\n{_HEADER}\n\n{lines}\n\n{_HEADER}\n\n{formula}\n\n{_HEADER}"
+
+
+@router.callback_query(F.data == StatisticsBtn.TOP10)
+async def cb_top10(
     callback: CallbackQuery,
     user_service: UserService,
+    stats_service: StatsService,
 ) -> None:
-    """Общий обработчик WIP-секций центра статистики."""
     if not await _check_admin(callback, user_service):
         return
-    section = _SECTION_NAMES.get(callback.data, "Раздел")
     await callback.answer()
-    await callback.message.edit_text(
+    users = await stats_service.top_active_users(limit=10)
+    await callback.message.edit_text(_fmt_top10_card(users), reply_markup=STATISTICS_SECTION_KB)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 📈 Рост клана
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _fmt_growth_card(g) -> str:
+    if not g.total:
+        return f"{_HEADER}\n📈 <b>Рост клана</b>\n{_HEADER}\n\n🚧 Пока недостаточно данных.\n\n{_HEADER}"
+    bar = "".join("█" if cnt > 0 else "░" for _, cnt in g.by_day)
+    days = len(g.by_day)
+    return (
+        f"{_HEADER}\n📈 <b>Рост клана</b>\n{_HEADER}\n\n"
+        f"👥 Всего участников: {g.total}\n"
+        f"📅 Сегодня: +{g.today}\n"
+        f"📆 За месяц: +{g.month}\n\n"
         f"{_HEADER}\n"
-        f"<b>{section}</b>\n"
-        f"{_HEADER}\n\n"
-        f"{_WIP}",
-        reply_markup=STATISTICS_SECTION_KB,
+        f"Последние {days} дней\n"
+        f"{bar}\n\n"
+        f"{_HEADER}"
     )
+
+
+@router.callback_query(F.data == StatisticsBtn.GROWTH)
+async def cb_growth(
+    callback: CallbackQuery,
+    user_service: UserService,
+    stats_service: StatsService,
+) -> None:
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    growth = await stats_service.clan_growth(chart_days=14)
+    await callback.message.edit_text(_fmt_growth_card(growth), reply_markup=STATISTICS_SECTION_KB)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 👑 Зал славы
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _fmt_hof_row(icon: str, label: str, name: str | None, extra: str = "") -> str:
+    if not name:
+        return f"{_HEADER}\n{icon} {label}\n🚧 Нет данных"
+    return f"{_HEADER}\n{icon} {label}\n{name}" + (f"\n{extra}" if extra else "")
+
+
+def _fmt_hall_of_fame_card(
+    month_winner, week_winner, news_s, guides_s, screenshots_s, events_s
+) -> str:
+    best_news   = news_s.top_authors[0].name        if news_s.top_authors        else None
+    best_guides = guides_s.top_authors[0].name      if guides_s.top_authors      else None
+    best_shots  = screenshots_s.top_authors[0].name if screenshots_s.top_authors else None
+    best_events = events_s.top_authors[0].name      if events_s.top_authors      else None
+
+    rows = [
+        f"{_HEADER}\n👑 <b>Зал славы</b>",
+        _fmt_hof_row("🥇", "Лучший участник месяца",
+                     month_winner.game_nick if month_winner else None,
+                     f"{month_winner.score} очков" if month_winner else ""),
+        _fmt_hof_row("🔥", "Самый активный недели",
+                     week_winner.game_nick if week_winner else None,
+                     f"{week_winner.score} очков" if week_winner else ""),
+        _fmt_hof_row("📰", "Лучший автор новостей",   best_news),
+        _fmt_hof_row("📚", "Лучший автор гайдов",     best_guides),
+        _fmt_hof_row("📸", "Лучший по скриншотам",    best_shots),
+        _fmt_hof_row("📅", "Лучший организатор событий", best_events),
+        _HEADER,
+    ]
+    return "\n".join(rows)
+
+
+@router.callback_query(F.data == StatisticsBtn.HALL_OF_FAME)
+async def cb_hall_of_fame(
+    callback: CallbackQuery,
+    user_service: UserService,
+    stats_service: StatsService,
+) -> None:
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    month_w, week_w, news_s, guides_s, shots_s, events_s = await asyncio.gather(
+        stats_service.best_of_month(),
+        stats_service.best_of_week(),
+        stats_service.news(),
+        stats_service.guides(),
+        stats_service.screenshots(),
+        stats_service.events(),
+    )
+    text = _fmt_hall_of_fame_card(month_w, week_w, news_s, guides_s, shots_s, events_s)
+    await callback.message.edit_text(text, reply_markup=STATISTICS_SECTION_KB)
