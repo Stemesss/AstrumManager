@@ -8,6 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
 from bot.services.user_service import UserService
 from bot.utils.roles import role_label
+from bot.utils.text import pluralize_days
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -72,16 +73,16 @@ async def handle_settings(message: Message, user_service: UserService) -> None:
     await message.answer(
         "━━━━━━━━━━━━━━━━━━━━\n"
         "⚜️ <b>AstrumManager</b>\n"
-        "👤 <b>Профиль пользователя</b>\n"
+        "👤 <b>Личный профиль</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"👤 <b>Имя:</b> {user.first_name}\n"
-        f"🎮 <b>Ник:</b> {nick_str}\n\n"
+        f"👤 <b>Ник:</b> {nick_str}\n\n"
         f"🏅 <b>Роль:</b> {role_label(role)}\n\n"
-        f"📅 <b>В клане:</b> {stats['days_in_clan']} дней\n"
+        f"📅 <b>В клане:</b> {pluralize_days(stats['days_in_clan'])}\n"
         f"📚 <b>Создано гайдов:</b> {stats['guides_count']}\n"
         f"📸 <b>Загружено скриншотов:</b> {stats['screenshots_count']}\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "🟢 <b>Статус:</b> Активен\n"
+        "🟢 <b>Статус:</b> Онлайн\n\n"
+        "✏️ Изменить ник\n\n"
         "━━━━━━━━━━━━━━━━━━━━",
         reply_markup=_SETTINGS_KB,
     )
