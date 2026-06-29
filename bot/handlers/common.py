@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Обработчики основных команд: /start, /help, /about."""
 import logging
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
@@ -11,9 +12,13 @@ from bot.keyboards.main_menu import MAIN_KEYBOARD
 from bot.services.user_service import UserService
 from bot.states.nick import NickSetup
 from bot.utils.roles import role_label
+from bot.utils.text import greeting_by_hour
 
 router = Router()
 logger = logging.getLogger(__name__)
+
+# Московское время UTC+3 — стандартная зона сообщества Astrum
+_MSK = timezone(timedelta(hours=3))
 
 
 @router.message(CommandStart())
@@ -22,34 +27,50 @@ async def handle_start(
     user_service: UserService,
     state: FSMContext,
 ) -> None:
-    """Регистрирует пользователя. При первом запуске запрашивает игровой ник."""
+    """
+    Регистрирует пользователя.
+    - Новый пользователь (нет ника) → запрашивает игровой ник.
+    - Зарегистрированный → умное приветствие по времени суток + главное меню.
+    """
     if not message.from_user:
         return
 
     await state.clear()
     user = await user_service.get_or_create(message.from_user)
-    logger.info("Пользователь %s запустил бота (роль: %s)", user.telegram_id, user.role.value)
 
     if not user.game_nick:
         # Первый запуск — запрашиваем ник перед показом меню
         await state.set_state(NickSetup.waiting_nick)
+        logger.info("Новый пользователь %s — запрос игрового ника", user.telegram_id)
         await message.answer(
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚜️ <b>AstrumManager</b>\n"
+            "Добро пожаловать!\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "🌌 Добро пожаловать в клан <b>Astrum</b>!\n\n"
-            "Перед началом работы введи свой <b>игровой ник</b> "
-            "(от 2 до 24 символов):"
+            "Привет! 👋\n\n"
+            "Похоже, ты здесь впервые.\n\n"
+            "Прежде чем начать, введи свой игровой ник.\n\n"
+            "Например:\n"
+            "<code>Stemessss</code>",
         )
         return
 
+    now = datetime.now(_MSK)
+    header, greeting_word, emoji = greeting_by_hour(now.hour)
+
+    logger.info(
+        "Пользователь %s (%s) запустил бота — %s (МСК %02d:00)",
+        user.telegram_id, user.game_nick, greeting_word, now.hour,
+    )
     await message.answer(
         "━━━━━━━━━━━━━━━━━━━━\n"
         "⚜️ <b>AstrumManager</b>\n"
+        f"{header}\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🌌 Добро пожаловать, <b>{user.game_nick}</b>!\n"
-        f"🏅 Твоя роль: {role_label(user.role)}\n\n"
-        "Выбери нужный раздел.",
+        f"{greeting_word}, <b>{user.game_nick}</b>! {emoji}\n\n"
+        "Рады снова видеть тебя в сообществе Astrum.\n\n"
+        "Желаем удачной игры и хорошего настроения!\n\n"
+        "Выберите нужный раздел ниже.",
         reply_markup=MAIN_KEYBOARD,
     )
 
