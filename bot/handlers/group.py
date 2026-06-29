@@ -74,6 +74,10 @@ async def handle_new_member(
     Если ветка не настроена — отправляет в основной чат.
     Игнорирует выходы и другие изменения статуса.
     """
+    logger.info("NEW MEMBER EVENT RECEIVED — chat=%s old=%s new=%s",
+                event.chat.id,
+                event.old_chat_member.status,
+                event.new_chat_member.status)
     old = event.old_chat_member.status
     new = event.new_chat_member.status
 

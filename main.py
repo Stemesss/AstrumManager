@@ -59,8 +59,9 @@ async def on_startup(
     await dp["topic_service"].seed_default_topics()
     me = await bot.get_me()
     dp["bot_username"] = me.username or ""
-    logger.info("Регистрация вебхука → %s", webhook_url)
-    await bot.set_webhook(webhook_url, drop_pending_updates=True)
+    allowed = dp.resolve_used_update_types()
+    logger.info("Регистрация вебхука → %s  (allowed_updates=%s)", webhook_url, allowed)
+    await bot.set_webhook(webhook_url, allowed_updates=allowed, drop_pending_updates=True)
     logger.info("Вебхук успешно зарегистрирован")
 
 
