@@ -13,8 +13,9 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, common, echo, group, menu, news, nick, setrole
+from bot.handlers import admin, audit, common, echo, group, menu, news, nick, setrole
 from bot.middlewares.logging import LoggingMiddleware
+from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
 from bot.services.user_service import UserService
 
@@ -84,11 +85,13 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     dp = Dispatcher()
 
     # ── Внедрение зависимостей ────────────────────────────────────────────
-    user_service = UserService(db)
-    news_service = NewsService(db)
-    dp["user_service"] = user_service
-    dp["news_service"] = news_service
-    dp["db"] = db
+    user_service  = UserService(db)
+    news_service  = NewsService(db)
+    audit_service = AuditService(db)
+    dp["user_service"]  = user_service
+    dp["news_service"]  = news_service
+    dp["audit_service"] = audit_service
+    dp["db"]       = db
     dp["owner_id"] = owner_id
     # bot_username устанавливается в on_startup / on_startup_polling
 
@@ -96,8 +99,6 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     dp.update.middleware(LoggingMiddleware())
 
     # ── Групповой роутер (группы / супергруппы) ───────────────────────────
-    # Внутри group.router уже стоит фильтр F.chat.type.in_({"group","supergroup"}).
-    # Регистрируем напрямую в dp — без приватного фильтра.
     dp.include_router(group.router)
 
     # ── Приватный роутер (только личные сообщения) ────────────────────────
@@ -108,7 +109,8 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     # Порядок важен: специализированные роутеры до универсального echo
     private.include_router(common.router)
     private.include_router(setrole.router)
-    private.include_router(nick.router)   # FSM ника — до menu/news
+    private.include_router(nick.router)    # FSM ника — до menu/news
+    private.include_router(audit.router)   # до menu — чтобы перехватить AuditSearch
     private.include_router(news.router)
     private.include_router(admin.router)
     private.include_router(menu.router)

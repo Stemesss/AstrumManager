@@ -14,9 +14,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.main_menu import MAIN_KEYBOARD
+from bot.models.audit import AuditAction
+from bot.models.user import UserRole
+from bot.services.audit_service import AuditService
 from bot.services.user_service import UserService
 from bot.states.nick import NickChange, NickSetup
 from bot.utils.profile import SETTINGS_KB, build_profile_card
+from bot.utils.roles import role_label
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -42,6 +46,7 @@ async def fsm_nick_setup(
     message: Message,
     state: FSMContext,
     user_service: UserService,
+    audit_service: AuditService,
 ) -> None:
     """Принимает игровой ник при первом запуске."""
     if not message.text or message.text.startswith("/"):
@@ -62,6 +67,15 @@ async def fsm_nick_setup(
     await user_service.set_game_nick(message.from_user.id, nick)
     await state.clear()
     logger.info("Пользователь %s установил ник %r", message.from_user.id, nick)
+
+    # Журнал: регистрация нового участника
+    await audit_service.log(
+        user_id=message.from_user.id,
+        game_nick=nick,
+        role=UserRole.MEMBER,
+        action_type=AuditAction.MEMBER_REGISTER,
+        description=f"👤 {nick} зарегистрировался в клане",
+    )
 
     await message.answer(
         f"✅ <b>Ник успешно сохранён!</b>\n\n"
@@ -90,6 +104,7 @@ async def fsm_nick_change(
     message: Message,
     state: FSMContext,
     user_service: UserService,
+    audit_service: AuditService,
 ) -> None:
     """Принимает новый ник, сохраняет и показывает обновлённый профиль."""
     if not message.text or message.text.startswith("/"):
@@ -107,13 +122,24 @@ async def fsm_nick_change(
         )
         return
 
+    # Фиксируем старый ник ДО обновления (для журнала)
+    old_nick = await user_service.get_game_nick(message.from_user.id) or "?"
+    role = await user_service.get_role(message.from_user.id)
+
     await user_service.set_game_nick(message.from_user.id, nick)
     await state.clear()
     logger.info("Пользователь %s сменил ник на %r", message.from_user.id, nick)
 
-    role = await user_service.get_role(message.from_user.id)
-    stats = await user_service.get_profile_stats(message.from_user.id)
+    # Журнал: смена ника
+    await audit_service.log(
+        user_id=message.from_user.id,
+        game_nick=old_nick,
+        role=role,
+        action_type=AuditAction.MEMBER_NICK_CHANGE,
+        description=f"{role_label(role)} {old_nick} изменил ник: {old_nick} → {nick}",
+    )
 
+    stats = await user_service.get_profile_stats(message.from_user.id)
     await message.answer(
         f"✅ <b>Ник успешно изменён!</b>\n\n"
         + build_profile_card(nick, role, stats),

@@ -2,6 +2,7 @@
 """Асинхронная работа с SQLite через aiosqlite."""
 import logging
 import os
+import re
 
 import aiosqlite
 
@@ -31,6 +32,18 @@ CREATE TABLE IF NOT EXISTS news (
 )
 """
 
+_CREATE_AUDIT = """
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    game_nick   TEXT    NOT NULL,
+    role        TEXT    NOT NULL,
+    action_type TEXT    NOT NULL,
+    description TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
 
 class Database:
     """Обёртка над aiosqlite для хранения данных пользователей."""
@@ -47,6 +60,7 @@ class Database:
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.execute(_CREATE_USERS)
         await self._conn.execute(_CREATE_NEWS)
+        await self._conn.execute(_CREATE_AUDIT)
         # Миграция: добавляем game_nick для существующих БД (игнорируем если уже есть)
         try:
             await self._conn.execute("ALTER TABLE users ADD COLUMN game_nick TEXT")
@@ -199,3 +213,100 @@ class Database:
         await self.conn.commit()
         row = await self.get_news_by_id(news_id)
         return bool(row["pinned"]) if row else False
+
+    # ------------------------------------------------------------------ #
+    # Методы работы с журналом аудита
+    # ------------------------------------------------------------------ #
+
+    async def add_audit_log(
+        self,
+        user_id: int,
+        game_nick: str,
+        role: str,
+        action_type: str,
+        description: str,
+    ) -> int:
+        """Добавляет запись в журнал аудита, возвращает её ID."""
+        async with self.conn.execute(
+            """
+            INSERT INTO audit_log (user_id, game_nick, role, action_type, description)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (user_id, game_nick, role, action_type, description),
+        ) as cur:
+            row_id = cur.lastrowid
+        await self.conn.commit()
+        return row_id  # type: ignore[return-value]
+
+    async def get_audit_page(
+        self,
+        page: int,
+        per_page: int,
+        action_types: list[str] | None = None,
+    ) -> list[aiosqlite.Row]:
+        """Возвращает страницу записей журнала, отсортированных от новых к старым."""
+        offset = page * per_page
+        if action_types:
+            placeholders = ",".join("?" * len(action_types))
+            sql = (
+                f"SELECT * FROM audit_log WHERE action_type IN ({placeholders})"
+                " ORDER BY id DESC LIMIT ? OFFSET ?"
+            )
+            params: tuple = (*action_types, per_page, offset)
+        else:
+            sql = "SELECT * FROM audit_log ORDER BY id DESC LIMIT ? OFFSET ?"
+            params = (per_page, offset)
+        async with self.conn.execute(sql, params) as cur:
+            return await cur.fetchall()
+
+    async def count_audit(
+        self, action_types: list[str] | None = None
+    ) -> int:
+        """Возвращает общее число записей (с учётом фильтра по типу)."""
+        if action_types:
+            placeholders = ",".join("?" * len(action_types))
+            sql = f"SELECT COUNT(*) FROM audit_log WHERE action_type IN ({placeholders})"
+            params: tuple = tuple(action_types)
+        else:
+            sql = "SELECT COUNT(*) FROM audit_log"
+            params = ()
+        async with self.conn.execute(sql, params) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+    async def search_audit(
+        self, query: str, per_page: int = 20
+    ) -> list[aiosqlite.Row]:
+        """
+        Поиск записей:
+        - формат дд.мм.гггг → ищем по created_at;
+        - иначе             → по game_nick или action_type (LIKE).
+        """
+        date_match = re.match(r"(\d{2})\.(\d{2})\.(\d{4})", query.strip())
+        if date_match:
+            d, m, y = date_match.groups()
+            date_str = f"{y}-{m}-{d}"
+            sql = (
+                "SELECT * FROM audit_log WHERE created_at LIKE ?"
+                " ORDER BY id DESC LIMIT ?"
+            )
+            params: tuple = (f"{date_str}%", per_page)
+        else:
+            like_q = f"%{query}%"
+            sql = (
+                "SELECT * FROM audit_log"
+                " WHERE game_nick LIKE ? OR action_type LIKE ?"
+                " ORDER BY id DESC LIMIT ?"
+            )
+            params = (like_q, like_q, per_page)
+        async with self.conn.execute(sql, params) as cur:
+            return await cur.fetchall()
+
+    async def clear_audit_log(self) -> int:
+        """Удаляет все записи журнала, возвращает количество удалённых строк."""
+        async with self.conn.execute("SELECT COUNT(*) FROM audit_log") as cur:
+            row = await cur.fetchone()
+            count = int(row[0]) if row else 0
+        await self.conn.execute("DELETE FROM audit_log")
+        await self.conn.commit()
+        return count

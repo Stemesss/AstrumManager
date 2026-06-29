@@ -3,7 +3,7 @@
 Обработчик раздела «📰 Новости».
 
 Права доступа:
-  👑 Лидер, 🌟 Дитя клана, 🛡️ Старейшина → просмотр + управление (создание, редактирование, удаление, закрепление)
+  👑 Лидер, ⭐ Дитя клана, 🛡️ Старейшина → просмотр + управление
   👤 Участник → только просмотр
 """
 import logging
@@ -20,7 +20,9 @@ from bot.keyboards.news import (
     news_list_kb,
     news_view_kb,
 )
+from bot.models.audit import AuditAction
 from bot.models.user import UserRole
+from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
 from bot.services.user_service import UserService
 from bot.states.news import NewsCreate, NewsEdit
@@ -62,9 +64,7 @@ async def _show_news_list(
     edit: bool = False,
 ) -> None:
     """Отображает список новостей с клавиатурой."""
-    user_id = (
-        target.from_user.id if target.from_user else 0
-    )
+    user_id = target.from_user.id if target.from_user else 0
     role = await user_service.get_role(user_id)
     is_manager = role in NEWS_MANAGER_ROLES
     items = await news_service.get_list()
@@ -197,7 +197,10 @@ async def fsm_news_title(
         return
     title = message.text.strip()
     if len(title) > _MAX_TITLE_LEN:
-        await message.answer(f"⚠️ Заголовок слишком длинный (максимум {_MAX_TITLE_LEN} символов). Попробуйте ещё раз.")
+        await message.answer(
+            f"⚠️ Заголовок слишком длинный (максимум {_MAX_TITLE_LEN} символов). "
+            "Попробуйте ещё раз."
+        )
         return
 
     await state.update_data(title=title)
@@ -214,6 +217,8 @@ async def fsm_news_content(
     message: Message,
     state: FSMContext,
     news_service: NewsService,
+    user_service: UserService,
+    audit_service: AuditService,
 ) -> None:
     """Принимает текст новости и сохраняет её."""
     if not message.text or message.text.startswith("/"):
@@ -221,7 +226,10 @@ async def fsm_news_content(
         return
     content = message.text.strip()
     if len(content) > _MAX_CONTENT_LEN:
-        await message.answer(f"⚠️ Текст слишком длинный (максимум {_MAX_CONTENT_LEN} символов). Попробуйте ещё раз.")
+        await message.answer(
+            f"⚠️ Текст слишком длинный (максимум {_MAX_CONTENT_LEN} символов). "
+            "Попробуйте ещё раз."
+        )
         return
 
     data = await state.get_data()
@@ -235,6 +243,18 @@ async def fsm_news_content(
     await state.clear()
 
     logger.info("Пользователь %s создал новость #%d: %r", author_id, item.id, title)
+
+    # Журнал: создание новости
+    actor_nick = await user_service.get_game_nick(author_id) or author_name
+    actor_role = await user_service.get_role(author_id)
+    await audit_service.log(
+        user_id=author_id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.NEWS_CREATE,
+        description=f"{role_label(actor_role)} {actor_nick} создал новость «{title}»",
+    )
+
     await message.answer(
         f"✅ <b>Новость опубликована!</b>\n\n"
         f"<b>{item.title}</b>\n"
@@ -261,8 +281,7 @@ async def cb_news_edit(
     news_id = int(callback.data.split(":")[2])
     await callback.answer()
     await callback.message.edit_text(
-        "✏️ <b>Редактирование новости</b>\n\n"
-        "Что вы хотите изменить?",
+        "✏️ <b>Редактирование новости</b>\n\nЧто вы хотите изменить?",
         reply_markup=news_edit_kb(news_id),
     )
 
@@ -314,6 +333,8 @@ async def fsm_edit_title(
     message: Message,
     state: FSMContext,
     news_service: NewsService,
+    user_service: UserService,
+    audit_service: AuditService,
 ) -> None:
     """Сохраняет новый заголовок."""
     if not message.text or message.text.startswith("/"):
@@ -321,7 +342,9 @@ async def fsm_edit_title(
         return
     title = message.text.strip()
     if len(title) > _MAX_TITLE_LEN:
-        await message.answer(f"⚠️ Заголовок слишком длинный (максимум {_MAX_TITLE_LEN} символов).")
+        await message.answer(
+            f"⚠️ Заголовок слишком длинный (максимум {_MAX_TITLE_LEN} символов)."
+        )
         return
 
     data = await state.get_data()
@@ -329,8 +352,27 @@ async def fsm_edit_title(
     await news_service.update_title(news_id, title)
     await state.clear()
 
-    logger.info("Пользователь %s обновил заголовок новости #%d", message.from_user.id, news_id)
-    await message.answer(f"✅ <b>Заголовок обновлён!</b>\n\nНовый заголовок: <b>{title}</b>")
+    logger.info(
+        "Пользователь %s обновил заголовок новости #%d", message.from_user.id, news_id
+    )
+
+    # Журнал
+    actor_nick = await user_service.get_game_nick(message.from_user.id) or "?"
+    actor_role = await user_service.get_role(message.from_user.id)
+    await audit_service.log(
+        user_id=message.from_user.id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.NEWS_EDIT,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} "
+            f"изменил заголовок новости #{news_id}: «{title}»"
+        ),
+    )
+
+    await message.answer(
+        f"✅ <b>Заголовок обновлён!</b>\n\nНовый заголовок: <b>{title}</b>"
+    )
 
 
 @router.message(NewsEdit.waiting_content)
@@ -338,6 +380,8 @@ async def fsm_edit_content(
     message: Message,
     state: FSMContext,
     news_service: NewsService,
+    user_service: UserService,
+    audit_service: AuditService,
 ) -> None:
     """Сохраняет новый текст новости."""
     if not message.text or message.text.startswith("/"):
@@ -345,7 +389,9 @@ async def fsm_edit_content(
         return
     content = message.text.strip()
     if len(content) > _MAX_CONTENT_LEN:
-        await message.answer(f"⚠️ Текст слишком длинный (максимум {_MAX_CONTENT_LEN} символов).")
+        await message.answer(
+            f"⚠️ Текст слишком длинный (максимум {_MAX_CONTENT_LEN} символов)."
+        )
         return
 
     data = await state.get_data()
@@ -353,7 +399,24 @@ async def fsm_edit_content(
     await news_service.update_content(news_id, content)
     await state.clear()
 
-    logger.info("Пользователь %s обновил текст новости #%d", message.from_user.id, news_id)
+    logger.info(
+        "Пользователь %s обновил текст новости #%d", message.from_user.id, news_id
+    )
+
+    # Журнал
+    actor_nick = await user_service.get_game_nick(message.from_user.id) or "?"
+    actor_role = await user_service.get_role(message.from_user.id)
+    await audit_service.log(
+        user_id=message.from_user.id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.NEWS_EDIT,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} "
+            f"изменил текст новости #{news_id}"
+        ),
+    )
+
     await message.answer("✅ <b>Текст новости обновлён!</b>")
 
 
@@ -374,8 +437,7 @@ async def cb_delete_confirm(
     news_id = int(callback.data.split(":")[2])
     await callback.answer()
     await callback.message.edit_text(
-        "🗑 <b>Удаление новости</b>\n\n"
-        "Вы уверены? Это действие нельзя отменить.",
+        "🗑 <b>Удаление новости</b>\n\nВы уверены? Это действие нельзя отменить.",
         reply_markup=news_delete_confirm_kb(news_id),
     )
 
@@ -385,6 +447,7 @@ async def cb_delete(
     callback: CallbackQuery,
     user_service: UserService,
     news_service: NewsService,
+    audit_service: AuditService,
 ) -> None:
     """Удаляет новость после подтверждения."""
     role = await user_service.get_role(callback.from_user.id)
@@ -392,8 +455,24 @@ async def cb_delete(
         await callback.answer("🔒 Недостаточно прав.", show_alert=True)
         return
     news_id = int(callback.data.split(":")[2])
+
+    # Читаем название до удаления (для журнала)
+    item = await news_service.get_by_id(news_id)
+    title_for_log = item.title if item else f"#{news_id}"
+
     await news_service.delete(news_id)
     logger.info("Пользователь %s удалил новость #%d", callback.from_user.id, news_id)
+
+    # Журнал
+    actor_nick = await user_service.get_game_nick(callback.from_user.id) or "?"
+    await audit_service.log(
+        user_id=callback.from_user.id,
+        game_nick=actor_nick,
+        role=role,
+        action_type=AuditAction.NEWS_DELETE,
+        description=f"{role_label(role)} {actor_nick} удалил новость «{title_for_log}»",
+    )
+
     await callback.answer("🗑 Новость удалена.")
     await _show_news_list(callback, news_service, user_service, edit=True)
 
@@ -407,6 +486,7 @@ async def cb_pin(
     callback: CallbackQuery,
     user_service: UserService,
     news_service: NewsService,
+    audit_service: AuditService,
 ) -> None:
     """Переключает закрепление новости."""
     role = await user_service.get_role(callback.from_user.id)
@@ -415,12 +495,30 @@ async def cb_pin(
         return
     news_id = int(callback.data.split(":")[2])
     new_state = await news_service.toggle_pin(news_id)
-    action = "закреплена" if new_state else "откреплена"
-    logger.info("Пользователь %s %s новость #%d", callback.from_user.id, action, news_id)
-    await callback.answer(f"{'📌' if new_state else '📍'} Новость {action}.")
+    action_word = "закреплена" if new_state else "откреплена"
+    logger.info(
+        "Пользователь %s %s новость #%d", callback.from_user.id, action_word, news_id
+    )
+
+    # Журнал
+    item = await news_service.get_by_id(news_id)
+    title_for_log = item.title if item else f"#{news_id}"
+    actor_nick = await user_service.get_game_nick(callback.from_user.id) or "?"
+    action_type = AuditAction.NEWS_PIN if new_state else AuditAction.NEWS_UNPIN
+    action_ru = "закрепил" if new_state else "открепил"
+    await audit_service.log(
+        user_id=callback.from_user.id,
+        game_nick=actor_nick,
+        role=role,
+        action_type=action_type,
+        description=(
+            f"{role_label(role)} {actor_nick} {action_ru} новость «{title_for_log}»"
+        ),
+    )
+
+    await callback.answer(f"{'📌' if new_state else '📍'} Новость {action_word}.")
 
     # Обновляем карточку новости
-    item = await news_service.get_by_id(news_id)
     if not item:
         await _show_news_list(callback, news_service, user_service, edit=True)
         return

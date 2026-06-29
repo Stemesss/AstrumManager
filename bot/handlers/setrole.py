@@ -6,7 +6,9 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
+from bot.models.audit import AuditAction
 from bot.models.user import UserRole
+from bot.services.audit_service import AuditService
 from bot.services.user_service import UserService
 from bot.utils.roles import ROLE_ORDER, role_label
 
@@ -25,6 +27,7 @@ _USAGE = (
 async def handle_setrole(
     message: Message,
     user_service: UserService,
+    audit_service: AuditService,
     owner_id: int | None,
 ) -> None:
     """Назначает роль пользователю. Доступно только владельцу бота."""
@@ -76,6 +79,23 @@ async def handle_setrole(
         "Владелец %s назначил роль %r пользователю %s (подтверждено: %r)",
         message.from_user.id, role.value, target_id, confirmed.value,
     )
+
+    # Журнал: смена роли
+    actor_nick = await user_service.get_game_nick(message.from_user.id) or "Владелец"
+    actor_role = await user_service.get_role(message.from_user.id)
+    target_nick = await user_service.get_game_nick(target_id) or str(target_id)
+
+    await audit_service.log(
+        user_id=message.from_user.id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.MEMBER_ROLE_SET,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} назначил роль "
+            f"{role_label(confirmed)} пользователю {target_nick}"
+        ),
+    )
+
     await message.answer(
         f"✅ Роль успешно изменена.\n\n"
         f"Пользователь: <code>{target_id}</code>\n"
