@@ -16,6 +16,9 @@ from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
 router = Router()
 logger = logging.getLogger(__name__)
 
+# Суперпользователь — полный доступ независимо от роли в БД
+_SUPERUSER_ID = 8490615925
+
 
 def _usage_for(actor_role: UserRole) -> str:
     """Возвращает подсказку /setrole с ролями, доступными данному актору."""
@@ -42,13 +45,13 @@ async def handle_setrole(
         return
 
     actor_id   = message.from_user.id
-    is_owner   = owner_id is not None and actor_id == owner_id
+    is_superuser = actor_id == _SUPERUSER_ID or (owner_id is not None and actor_id == owner_id)
 
     # Получаем роль актора
     actor_role = await user_service.get_role(actor_id)
 
-    # Владелец бота получает права Лидера даже если в БД у него другая роль
-    effective_role = UserRole.LEADER if is_owner else actor_role
+    # Суперпользователь и владелец бота всегда получают права Лидера
+    effective_role = UserRole.LEADER if is_superuser else actor_role
 
     # Проверка: есть ли у актора право назначать хоть кому-то что-то
     if not assignable_roles(effective_role):
