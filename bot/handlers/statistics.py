@@ -17,7 +17,9 @@ from bot.keyboards.statistics import (
     STATISTICS_SECTION_KB,
     StatisticsBtn,
 )
+from bot.models.stats import UserActivity
 from bot.models.user import UserRole
+from bot.services.stats_service import StatsService
 from bot.services.user_service import UserService
 
 router = Router()
@@ -43,6 +45,12 @@ _SECTION_NAMES: dict[str, str] = {
     StatisticsBtn.HALL_OF_FAME:     "👑 Зал славы",
 }
 
+_HEADER = "━━━━━━━━━━━━━━━━━━━━"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Вспомогательные
+# ─────────────────────────────────────────────────────────────────────────────
 
 async def _check_admin(callback: CallbackQuery, user_service: UserService) -> bool:
     """Проверяет административные права; отвечает alert и возвращает False при отказе."""
@@ -51,6 +59,22 @@ async def _check_admin(callback: CallbackQuery, user_service: UserService) -> bo
         await callback.answer("🔒 Недостаточно прав.", show_alert=True)
         return False
     return True
+
+
+def _fmt_best_of_month(u: UserActivity) -> str:
+    """Форматирует карточку «Лучший участник месяца»."""
+    return (
+        f"{_HEADER}\n"
+        f"🏆 <b>Лучший участник месяца</b>\n"
+        f"{_HEADER}\n\n"
+        f"👤 Ник:\n{u.game_nick}\n\n"
+        f"⭐ Очков:\n{u.score}\n\n"
+        f"📰 Новостей:\n{u.news_count}\n\n"
+        f"📚 Гайдов:\n{u.guides_count}\n\n"
+        f"📸 Скриншотов:\n{u.screenshots_count}\n\n"
+        f"📅 Событий:\n{u.events_count}\n\n"
+        f"{_HEADER}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -65,9 +89,7 @@ async def cb_open_statistics(
     """Открывает меню центра статистики (новое сообщение)."""
     if not await _check_admin(callback, user_service):
         return
-    logger.info(
-        "Пользователь %s открыл центр статистики", callback.from_user.id
-    )
+    logger.info("Пользователь %s открыл центр статистики", callback.from_user.id)
     await callback.answer()
     await callback.message.answer(_MENU_TEXT, reply_markup=STATISTICS_MENU_KB)
 
@@ -96,11 +118,40 @@ async def cb_statistics_back(callback: CallbackQuery) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Заглушки для всех секций
+# 🏆 Лучший участник месяца
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == StatisticsBtn.BEST_MONTH)
+async def cb_best_month(
+    callback: CallbackQuery,
+    user_service: UserService,
+    stats_service: StatsService,
+) -> None:
+    """Показывает карточку лучшего участника текущего месяца."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+
+    winner = await stats_service.best_of_month()
+    if winner:
+        text = _fmt_best_of_month(winner)
+    else:
+        text = (
+            f"{_HEADER}\n"
+            f"🏆 <b>Лучший участник месяца</b>\n"
+            f"{_HEADER}\n\n"
+            "🚧 Пока недостаточно данных для определения\n"
+            "лучшего участника месяца.\n\n"
+            f"{_HEADER}"
+        )
+    await callback.message.edit_text(text, reply_markup=STATISTICS_SECTION_KB)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Заглушки для оставшихся WIP-секций
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.in_({
-    StatisticsBtn.BEST_MONTH,
     StatisticsBtn.MOST_ACTIVE_WEEK,
     StatisticsBtn.TOP10,
     StatisticsBtn.NEWS,
@@ -114,15 +165,15 @@ async def cb_statistics_section(
     callback: CallbackQuery,
     user_service: UserService,
 ) -> None:
-    """Общий обработчик всех WIP-секций центра статистики."""
+    """Общий обработчик WIP-секций центра статистики."""
     if not await _check_admin(callback, user_service):
         return
     section = _SECTION_NAMES.get(callback.data, "Раздел")
     await callback.answer()
     await callback.message.edit_text(
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"{_HEADER}\n"
         f"<b>{section}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{_HEADER}\n\n"
         f"{_WIP}",
         reply_markup=STATISTICS_SECTION_KB,
     )

@@ -43,9 +43,29 @@ class StatsService:
         ]
 
     async def most_active_user(self) -> UserActivity | None:
-        """Возвращает участника с максимальной активностью или None."""
+        """Возвращает участника с максимальной активностью за всё время или None."""
         result = await self.top_active_users(limit=1)
         return result[0] if result else None
+
+    async def best_of_month(self) -> UserActivity | None:
+        """
+        Участник с максимальным количеством очков за текущий календарный месяц.
+        Формула: news_create=5, guide_create=10, screenshot_upload=2, event_create=8.
+        Возвращает None, если в этом месяце активности не было.
+        """
+        row = await self._db.stats_best_of_month()
+        if row is None:
+            return None
+        return UserActivity(
+            user_id=int(row["user_id"]),
+            game_nick=row["game_nick"] or "—",
+            role=row["role"],
+            score=int(row["score"] or 0),
+            news_count=int(row["news_count"] or 0),
+            guides_count=int(row["guides_count"] or 0),
+            screenshots_count=int(row["screenshots_count"] or 0),
+            events_count=int(row["events_count"] or 0),
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Новости

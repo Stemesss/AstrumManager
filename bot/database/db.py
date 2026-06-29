@@ -432,3 +432,35 @@ class Database:
         """
         async with self.conn.execute(sql, (f"-{days - 1}",)) as cur:
             return await cur.fetchall()
+
+    async def stats_best_of_month(self) -> aiosqlite.Row | None:
+        """
+        Участник с максимальным количеством очков за текущий календарный месяц.
+        Формула: news_create=5, guide_create=10, screenshot_upload=2, event_create=8.
+        Возвращает одну строку или None, если данных нет.
+        """
+        sql = """
+        SELECT
+            al.user_id,
+            COALESCE(u.game_nick, MAX(al.game_nick)) AS game_nick,
+            MAX(al.role)                              AS role,
+            SUM(CASE al.action_type
+                WHEN 'news_create'       THEN 5
+                WHEN 'guide_create'      THEN 10
+                WHEN 'screenshot_upload' THEN 2
+                WHEN 'event_create'      THEN 8
+                ELSE 0 END)                           AS score,
+            SUM(CASE WHEN al.action_type = 'news_create'       THEN 1 ELSE 0 END) AS news_count,
+            SUM(CASE WHEN al.action_type = 'guide_create'      THEN 1 ELSE 0 END) AS guides_count,
+            SUM(CASE WHEN al.action_type = 'screenshot_upload' THEN 1 ELSE 0 END) AS screenshots_count,
+            SUM(CASE WHEN al.action_type = 'event_create'      THEN 1 ELSE 0 END) AS events_count
+        FROM audit_log al
+        LEFT JOIN users u ON u.telegram_id = al.user_id
+        WHERE al.action_type IN ('news_create','guide_create','screenshot_upload','event_create')
+          AND al.created_at >= strftime('%Y-%m-01', 'now')
+        GROUP BY al.user_id
+        ORDER BY score DESC
+        LIMIT 1
+        """
+        async with self.conn.execute(sql) as cur:
+            return await cur.fetchone()
