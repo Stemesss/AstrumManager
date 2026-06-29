@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Обработчик команды /setrole — назначение роли участнику клана."""
+"""Обработчик команды /setrole — назначение роли с учётом иерархии прав."""
 import logging
 
 from aiogram import Bot, Router
@@ -10,18 +10,22 @@ from bot.models.audit import AuditAction
 from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
 from bot.services.user_service import UserService
-from bot.utils.roles import ROLE_ORDER, role_label
+from bot.utils.roles import assignable_roles, can_assign, role_label
 from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Подсказка с ролями в порядке иерархии
-_USAGE = (
-    "Использование: /setrole &lt;telegram_id&gt; &lt;роль&gt;\n\n"
-    "Доступные роли (по убыванию старшинства):\n"
-    + "\n".join(f"• {role_label(r)}" for r in ROLE_ORDER)
-)
+
+def _usage_for(actor_role: UserRole) -> str:
+    """Возвращает подсказку /setrole с ролями, доступными данному актору."""
+    allowed = assignable_roles(actor_role)
+    roles_list = "\n".join(f"• {role_label(r)}" for r in allowed) if allowed else "  (нет доступных ролей)"
+    return (
+        "Использование: /setrole &lt;telegram_id&gt; &lt;роль&gt;\n\n"
+        f"Роли, которые вы можете назначать ({role_label(actor_role)}):\n"
+        f"{roles_list}"
+    )
 
 
 @router.message(Command("setrole"))
@@ -33,23 +37,28 @@ async def handle_setrole(
     owner_id: int | None,
     group_chat_id: int,
 ) -> None:
-    """Назначает роль пользователю. Доступно только владельцу бота."""
+    """Назначает роль пользователю с проверкой иерархии прав."""
     if not message.from_user:
         return
 
-    # Проверка прав владельца
-    if owner_id is None or message.from_user.id != owner_id:
-        logger.warning(
-            "Пользователь %s попытался использовать /setrole без прав владельца",
-            message.from_user.id,
-        )
-        await message.answer("🔒 Команда доступна только владельцу бота.")
+    actor_id   = message.from_user.id
+    is_owner   = owner_id is not None and actor_id == owner_id
+
+    # Получаем роль актора
+    actor_role = await user_service.get_role(actor_id)
+
+    # Владелец бота получает права Лидера даже если в БД у него другая роль
+    effective_role = UserRole.LEADER if is_owner else actor_role
+
+    # Проверка: есть ли у актора право назначать хоть кому-то что-то
+    if not assignable_roles(effective_role):
+        await message.answer("🔒 У вас нет прав для управления ролями.")
         return
 
     # Разбор аргументов
     parts = (message.text or "").split(maxsplit=2)
     if len(parts) < 3:
-        await message.answer(_USAGE)
+        await message.answer(_usage_for(effective_role))
         return
 
     raw_id, raw_role = parts[1], parts[2].strip()
@@ -69,7 +78,17 @@ async def handle_setrole(
             break
 
     if role is None:
-        await message.answer(f"❌ Неизвестная роль: <b>{raw_role}</b>\n\n{_USAGE}")
+        await message.answer(
+            f"❌ Неизвестная роль: <b>{raw_role}</b>\n\n{_usage_for(effective_role)}"
+        )
+        return
+
+    # Проверка иерархии прав
+    if not can_assign(effective_role, role):
+        await message.answer(
+            f"⛔ Недостаточно прав для назначения роли {role_label(role)}.\n\n"
+            f"{_usage_for(effective_role)}"
+        )
         return
 
     # Сохранение в БД
@@ -79,17 +98,16 @@ async def handle_setrole(
     confirmed = await user_service.get_role(target_id)
 
     logger.info(
-        "Владелец %s назначил роль %r пользователю %s (подтверждено: %r)",
-        message.from_user.id, role.value, target_id, confirmed.value,
+        "%s (роль: %s) назначил роль %r пользователю %s (подтверждено: %r)",
+        actor_id, effective_role.value, role.value, target_id, confirmed.value,
     )
 
-    # Журнал: смена роли
-    actor_nick  = await user_service.get_game_nick(message.from_user.id) or "Владелец"
-    actor_role  = await user_service.get_role(message.from_user.id)
+    # Журнал аудита
+    actor_nick  = await user_service.get_game_nick(actor_id) or str(actor_id)
     target_nick = await user_service.get_game_nick(target_id) or str(target_id)
 
     await audit_service.log(
-        user_id=message.from_user.id,
+        user_id=actor_id,
         game_nick=actor_nick,
         role=actor_role,
         action_type=AuditAction.MEMBER_ROLE_SET,
@@ -102,7 +120,6 @@ async def handle_setrole(
     # Синхронизация Telegram Admin Title
     tg_error = await sync_admin_title(bot, group_chat_id, target_id, confirmed)
 
-    # Формируем строку о синхронизации
     if tg_error:
         tg_note = f"\n\n{tg_error}"
     elif confirmed in ADMIN_TITLES:

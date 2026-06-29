@@ -27,6 +27,27 @@ ROLE_ORDER: list[UserRole] = [
 ]
 
 
+# Матрица прав: кто какие роли может назначать
+# Ключ — роль того, кто назначает; значение — множество ролей, которые он может назначить.
+ROLE_CAN_ASSIGN: dict[UserRole, frozenset[UserRole]] = {
+    UserRole.LEADER:     frozenset({UserRole.LEADER, UserRole.CLAN_CHILD, UserRole.ELDER, UserRole.MEMBER}),
+    UserRole.CLAN_CHILD: frozenset({UserRole.ELDER, UserRole.MEMBER}),
+    UserRole.ELDER:      frozenset({UserRole.MEMBER}),
+    UserRole.MEMBER:     frozenset(),
+}
+
+
+def can_assign(actor_role: UserRole, target_role: UserRole) -> bool:
+    """Возвращает True, если actor_role имеет право назначить target_role."""
+    return target_role in ROLE_CAN_ASSIGN.get(actor_role, frozenset())
+
+
+def assignable_roles(actor_role: UserRole) -> list[UserRole]:
+    """Список ролей, которые actor_role может назначать (в порядке иерархии)."""
+    allowed = ROLE_CAN_ASSIGN.get(actor_role, frozenset())
+    return [r for r in ROLE_ORDER if r in allowed]
+
+
 def role_label(role: UserRole) -> str:
     """Возвращает иконку и название роли для отображения пользователю."""
     icon = _ROLE_ICONS.get(role, "❓")
