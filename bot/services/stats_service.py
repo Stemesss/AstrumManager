@@ -101,6 +101,7 @@ class StatsService:
             total=total,
             top_authors=[AuthorStat(name=r["game_nick"] or "—", count=r["count"]) for r in top_rows],
             latest_author=latest["game_nick"] if latest else None,
+            latest_description=latest["description"] if latest else None,
             latest_date=latest["created_at"] if latest else None,
         )
 
@@ -112,6 +113,46 @@ class StatsService:
 
     async def events_stats(self) -> ContentStats:
         return await self._content_stats(AuditAction.EVENT_CREATE)
+
+    # Публичные псевдонимы с коротким именем (для handlers/statistics.py)
+    async def news(self) -> NewsStats:
+        """Статистика новостей (псевдоним news_stats, top=3)."""
+        total, top_rows, latest = await self._db.stats_news(top_limit=3)
+        return NewsStats(
+            total=total,
+            top_authors=[AuthorStat(name=r["author_name"], count=r["count"]) for r in top_rows],
+            latest_title=latest["title"] if latest else None,
+            latest_date=latest["created_at"] if latest else None,
+        )
+
+    async def guides(self) -> ContentStats:
+        """Статистика гайдов (top=3)."""
+        total, top_rows, latest = await self._db.stats_guides(top_limit=3)
+        return ContentStats(
+            total=total,
+            top_authors=[AuthorStat(name=r["game_nick"] or "—", count=r["count"]) for r in top_rows],
+            latest_description=latest["description"] if latest else None,
+            latest_date=latest["created_at"] if latest else None,
+        )
+
+    async def screenshots(self) -> ContentStats:
+        """Статистика скриншотов (top=3)."""
+        total, top_rows, latest = await self._db.stats_screenshots(top_limit=3)
+        return ContentStats(
+            total=total,
+            top_authors=[AuthorStat(name=r["game_nick"] or "—", count=r["count"]) for r in top_rows],
+            latest_date=latest["created_at"] if latest else None,
+        )
+
+    async def events(self) -> ContentStats:
+        """Статистика событий (top=3)."""
+        total, top_rows, latest = await self._db.stats_events(top_limit=3)
+        return ContentStats(
+            total=total,
+            top_authors=[AuthorStat(name=r["game_nick"] or "—", count=r["count"]) for r in top_rows],
+            latest_description=latest["description"] if latest else None,
+            latest_date=latest["created_at"] if latest else None,
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Рост клана

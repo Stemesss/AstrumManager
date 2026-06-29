@@ -17,7 +17,7 @@ from bot.keyboards.statistics import (
     STATISTICS_SECTION_KB,
     StatisticsBtn,
 )
-from bot.models.stats import UserActivity
+from bot.models.stats import ContentStats, NewsStats, UserActivity
 from bot.models.user import UserRole
 from bot.services.stats_service import StatsService
 from bot.services.user_service import UserService
@@ -86,6 +86,71 @@ def _fmt_no_data(icon: str, title: str, period_hint: str) -> str:
         f"🚧 Пока недостаточно данных для определения\n"
         f"{period_hint}\n\n"
         f"{_HEADER}"
+    )
+
+
+def _fmt_date(dt_str: str) -> str:
+    """'2026-06-29 12:34:56' → '29.06.2026'. Возвращает исходную строку при ошибке."""
+    try:
+        return dt_str[:10].split("-")[2] + "." + dt_str[5:7] + "." + dt_str[:4]
+    except Exception:
+        return dt_str
+
+
+def _fmt_top_authors(authors: list) -> str:
+    """Нумерованный список топ-авторов. Пустая строка если список пуст."""
+    medals = ["1.", "2.", "3.", "4.", "5."]
+    lines = [
+        f"{medals[i]} {a.name} — {a.count}"
+        for i, a in enumerate(authors)
+    ]
+    return "\n".join(lines)
+
+
+def _fmt_news_card(s: "NewsStats") -> str:
+    """Карточка раздела «Новости»."""
+    if not s.total:
+        return f"{_HEADER}\n📰 <b>Новости</b>\n{_HEADER}\n\n🚧 Пока недостаточно данных.\n\n{_HEADER}"
+    top_block = _fmt_top_authors(s.top_authors) if s.top_authors else "—"
+    last_block = ""
+    if s.latest_title or s.latest_date:
+        last_block = (
+            f"\n{_HEADER}\n🕒 Последняя публикация\n"
+            + (f"\"{s.latest_title}\"\n" if s.latest_title else "")
+            + (_fmt_date(s.latest_date) if s.latest_date else "")
+        )
+    return (
+        f"{_HEADER}\n📰 <b>Новости</b>\n{_HEADER}\n\n"
+        f"📄 Всего новостей: {s.total}\n\n"
+        f"🥇 Топ авторов\n{top_block}"
+        f"{last_block}\n\n{_HEADER}"
+    )
+
+
+def _fmt_content_card(
+    icon: str,
+    title: str,
+    total_label: str,
+    top_label: str,
+    last_label: str,
+    s: "ContentStats",
+    show_last_name: bool = True,
+) -> str:
+    """Универсальная карточка контентного раздела (гайды / скриншоты / события)."""
+    if not s.total:
+        return f"{_HEADER}\n{icon} <b>{title}</b>\n{_HEADER}\n\n🚧 Пока недостаточно данных.\n\n{_HEADER}"
+    top_block = _fmt_top_authors(s.top_authors) if s.top_authors else "—"
+    last_block = ""
+    if s.latest_date:
+        last_block = f"\n{_HEADER}\n🕒 {last_label}\n"
+        if show_last_name and s.latest_description:
+            last_block += f"{s.latest_description}\n"
+        last_block += _fmt_date(s.latest_date)
+    return (
+        f"{_HEADER}\n{icon} <b>{title}</b>\n{_HEADER}\n\n"
+        f"📄 {total_label}: {s.total}\n\n"
+        f"🥇 {top_label}\n{top_block}"
+        f"{last_block}\n\n{_HEADER}"
     )
 
 
@@ -173,15 +238,77 @@ async def cb_most_active_week(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 📰 Новости / 📚 Гайды / 📸 Скриншоты / 📅 События
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == StatisticsBtn.NEWS)
+async def cb_news(
+    callback: CallbackQuery,
+    user_service: UserService,
+    stats_service: StatsService,
+) -> None:
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    data = await stats_service.news()
+    await callback.message.edit_text(_fmt_news_card(data), reply_markup=STATISTICS_SECTION_KB)
+
+
+@router.callback_query(F.data == StatisticsBtn.GUIDES)
+async def cb_guides(
+    callback: CallbackQuery,
+    user_service: UserService,
+    stats_service: StatsService,
+) -> None:
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    data = await stats_service.guides()
+    text = _fmt_content_card(
+        "📚", "Гайды", "Всего гайдов", "Топ авторов", "Последний гайд", data
+    )
+    await callback.message.edit_text(text, reply_markup=STATISTICS_SECTION_KB)
+
+
+@router.callback_query(F.data == StatisticsBtn.SCREENSHOTS)
+async def cb_screenshots(
+    callback: CallbackQuery,
+    user_service: UserService,
+    stats_service: StatsService,
+) -> None:
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    data = await stats_service.screenshots()
+    text = _fmt_content_card(
+        "📸", "Скриншоты", "Всего скриншотов", "Самые активные", "Последняя загрузка",
+        data, show_last_name=False,
+    )
+    await callback.message.edit_text(text, reply_markup=STATISTICS_SECTION_KB)
+
+
+@router.callback_query(F.data == StatisticsBtn.EVENTS)
+async def cb_events(
+    callback: CallbackQuery,
+    user_service: UserService,
+    stats_service: StatsService,
+) -> None:
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    data = await stats_service.events()
+    text = _fmt_content_card(
+        "📅", "События", "Всего событий", "Лучшие организаторы", "Последнее событие", data
+    )
+    await callback.message.edit_text(text, reply_markup=STATISTICS_SECTION_KB)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Заглушки для оставшихся WIP-секций
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.in_({
     StatisticsBtn.TOP10,
-    StatisticsBtn.NEWS,
-    StatisticsBtn.GUIDES,
-    StatisticsBtn.SCREENSHOTS,
-    StatisticsBtn.EVENTS,
     StatisticsBtn.GROWTH,
     StatisticsBtn.HALL_OF_FAME,
 }))

@@ -465,6 +465,46 @@ class Database:
         async with self.conn.execute(sql) as cur:
             return await cur.fetchone()
 
+    # ── Сводные методы для карточек контента ───────────────────────────────
+
+    async def _stats_content_bundle(
+        self, action_type: str, top_limit: int
+    ) -> tuple[int, list, "aiosqlite.Row | None"]:
+        """Сводка для одного типа контента: всего + топ + последняя запись."""
+        total = await self.stats_count_action(action_type)
+        top = await self.stats_content_by_user(action_type, top_limit)
+        latest = await self.stats_content_latest(action_type)
+        return total, top, latest
+
+    async def stats_news(
+        self, top_limit: int = 3
+    ) -> tuple[int, list, "aiosqlite.Row | None"]:
+        """Сводка новостей: всего + топ авторов + последняя новость."""
+        total = await self.stats_count_news()
+        top = await self.stats_news_by_author(top_limit)
+        latest = await self.stats_news_latest()
+        return total, top, latest
+
+    async def stats_guides(
+        self, top_limit: int = 3
+    ) -> tuple[int, list, "aiosqlite.Row | None"]:
+        """Сводка гайдов."""
+        return await self._stats_content_bundle("guide_create", top_limit)
+
+    async def stats_screenshots(
+        self, top_limit: int = 3
+    ) -> tuple[int, list, "aiosqlite.Row | None"]:
+        """Сводка скриншотов."""
+        return await self._stats_content_bundle("screenshot_upload", top_limit)
+
+    async def stats_events(
+        self, top_limit: int = 3
+    ) -> tuple[int, list, "aiosqlite.Row | None"]:
+        """Сводка событий."""
+        return await self._stats_content_bundle("event_create", top_limit)
+
+    # ── Победитель по периоду ───────────────────────────────────────────────
+
     async def stats_best_of_month(self) -> aiosqlite.Row | None:
         """Победитель текущего календарного месяца."""
         return await self._stats_best_since("strftime('%Y-%m-01', 'now')")

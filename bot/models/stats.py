@@ -38,6 +38,7 @@ class ContentStats:
     total: int
     top_authors: list[AuthorStat] = field(default_factory=list)
     latest_author: str | None = None
+    latest_description: str | None = None  # описание/название из audit_log.description
     latest_date: str | None = None
 
 
