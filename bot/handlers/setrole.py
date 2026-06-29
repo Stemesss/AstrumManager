@@ -8,17 +8,16 @@ from aiogram.types import Message
 
 from bot.models.user import UserRole
 from bot.services.user_service import UserService
+from bot.utils.roles import ROLE_ORDER, role_label
 
 router = Router()
 logger = logging.getLogger(__name__)
 
+# Подсказка с ролями в порядке иерархии
 _USAGE = (
     "Использование: /setrole &lt;telegram_id&gt; &lt;роль&gt;\n\n"
-    "Доступные роли:\n"
-    "• Лидер\n"
-    "• Старейшина\n"
-    "• Дитя клана\n"
-    "• Участник"
+    "Доступные роли (по убыванию старшинства):\n"
+    + "\n".join(f"• {role_label(r)}" for r in ROLE_ORDER)
 )
 
 
@@ -56,7 +55,7 @@ async def handle_setrole(
         await message.answer(f"❌ Некорректный Telegram ID: <code>{raw_id}</code>")
         return
 
-    # Валидация роли
+    # Валидация роли (регистронезависимо)
     role: UserRole | None = None
     for r in UserRole:
         if r.value.lower() == raw_role.lower():
@@ -64,21 +63,21 @@ async def handle_setrole(
             break
 
     if role is None:
-        await message.answer(
-            f"❌ Неизвестная роль: <b>{raw_role}</b>\n\n{_USAGE}"
-        )
+        await message.answer(f"❌ Неизвестная роль: <b>{raw_role}</b>\n\n{_USAGE}")
         return
 
     # Сохранение в БД
     await user_service.set_role(target_id, role)
+
+    # Читаем обратно из БД — показываем именно то, что теперь хранится
+    confirmed = await user_service.get_role(target_id)
+
     logger.info(
-        "Владелец %s назначил роль %r пользователю %s",
-        message.from_user.id,
-        role.value,
-        target_id,
+        "Владелец %s назначил роль %r пользователю %s (подтверждено: %r)",
+        message.from_user.id, role.value, target_id, confirmed.value,
     )
     await message.answer(
         f"✅ Роль успешно изменена.\n\n"
         f"Пользователь: <code>{target_id}</code>\n"
-        f"Новая роль: <b>{role.value}</b>"
+        f"Новая роль: {role_label(confirmed)}"
     )

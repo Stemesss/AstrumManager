@@ -2,12 +2,21 @@
 """Утилиты для работы с ролями пользователей."""
 from bot.models.user import UserRole
 
+# Иконки в порядке иерархии: Лидер → Дитя клана → Старейшина → Участник
 _ROLE_ICONS: dict[UserRole, str] = {
     UserRole.LEADER: "👑",
-    UserRole.ELDER: "🌟",
-    UserRole.CLAN_CHILD: "🌱",
-    UserRole.MEMBER: "⚔️",
+    UserRole.CLAN_CHILD: "🌟",
+    UserRole.ELDER: "🛡️",
+    UserRole.MEMBER: "👤",
 }
+
+# Порядок ролей по убыванию старшинства
+ROLE_ORDER: list[UserRole] = [
+    UserRole.LEADER,
+    UserRole.CLAN_CHILD,
+    UserRole.ELDER,
+    UserRole.MEMBER,
+]
 
 
 def role_label(role: UserRole) -> str:

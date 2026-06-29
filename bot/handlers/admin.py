@@ -28,14 +28,14 @@ _WIP = "🚧 Раздел находится в разработке."
 # ───────────────────────────────────────────────────────────────────────────
 
 def _role_stats(users: list) -> str:
-    """Формирует строку статистики по ролям."""
+    """Формирует строку статистики по ролям в порядке иерархии."""
+    from bot.utils.roles import ROLE_ORDER
     by_role: dict[UserRole, int] = {}
     for u in users:
         by_role[u.role] = by_role.get(u.role, 0) + 1
 
-    order = [UserRole.LEADER, UserRole.ELDER, UserRole.CLAN_CHILD, UserRole.MEMBER]
     lines = []
-    for role in order:
+    for role in ROLE_ORDER:          # 👑 Лидер → 🌟 Дитя клана → 🛡️ Старейшина → 👤 Участник
         count = by_role.get(role, 0)
         if count:
             lines.append(f"  {role_label(role)}: {count}")
