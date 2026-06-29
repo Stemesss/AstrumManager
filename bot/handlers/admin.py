@@ -10,14 +10,16 @@ import datetime
 import logging
 
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.admin_panel import ADMIN_PANEL_KB, AdminBtn
 from bot.keyboards.audit import audit_menu_kb
-from bot.keyboards.main_menu import BTN
+from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
 from bot.models.user import UserRole
 from bot.services.news_service import NewsService
 from bot.services.user_service import UserService
+from bot.states.publish import PublishWizard
 from bot.utils.roles import ROLE_ORDER, role_label
 
 router = Router()
@@ -170,23 +172,79 @@ async def _wip_callback(
 
 
 @router.callback_query(F.data == AdminBtn.NEWS)
-async def cb_news(callback: CallbackQuery, user_service: UserService) -> None:
-    await _wip_callback(callback, user_service, "📰 Управление новостями")
+async def cb_news(
+    callback: CallbackQuery, user_service: UserService, state: FSMContext
+) -> None:
+    role = await _check_admin(callback, user_service)
+    if role is None:
+        return
+    await state.set_state(PublishWizard.waiting_title)
+    await state.update_data(content_type="news")
+    await callback.answer()
+    await callback.message.answer(
+        "📰 <b>Создание новости</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Введите <b>заголовок</b> новости (до 100 символов):\n\n"
+        "<i>Отправьте /cancel для отмены</i>",
+        reply_markup=MAIN_KEYBOARD,
+    )
 
 
 @router.callback_query(F.data == AdminBtn.EVENTS)
-async def cb_events(callback: CallbackQuery, user_service: UserService) -> None:
-    await _wip_callback(callback, user_service, "📅 Управление событиями")
+async def cb_events(
+    callback: CallbackQuery, user_service: UserService, state: FSMContext
+) -> None:
+    role = await _check_admin(callback, user_service)
+    if role is None:
+        return
+    await state.set_state(PublishWizard.waiting_title)
+    await state.update_data(content_type="events")
+    await callback.answer()
+    await callback.message.answer(
+        "📅 <b>Создание события</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Введите <b>заголовок</b> события (до 100 символов):\n\n"
+        "<i>Отправьте /cancel для отмены</i>",
+        reply_markup=MAIN_KEYBOARD,
+    )
 
 
 @router.callback_query(F.data == AdminBtn.GUIDES)
-async def cb_guides(callback: CallbackQuery, user_service: UserService) -> None:
-    await _wip_callback(callback, user_service, "📚 Управление гайдами")
+async def cb_guides(
+    callback: CallbackQuery, user_service: UserService, state: FSMContext
+) -> None:
+    role = await _check_admin(callback, user_service)
+    if role is None:
+        return
+    await state.set_state(PublishWizard.waiting_title)
+    await state.update_data(content_type="guides")
+    await callback.answer()
+    await callback.message.answer(
+        "📚 <b>Создание гайда</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Введите <b>заголовок</b> гайда (до 100 символов):\n\n"
+        "<i>Отправьте /cancel для отмены</i>",
+        reply_markup=MAIN_KEYBOARD,
+    )
 
 
 @router.callback_query(F.data == AdminBtn.SCREENSHOTS)
-async def cb_screenshots(callback: CallbackQuery, user_service: UserService) -> None:
-    await _wip_callback(callback, user_service, "📸 Управление скриншотами")
+async def cb_screenshots(
+    callback: CallbackQuery, user_service: UserService, state: FSMContext
+) -> None:
+    role = await _check_admin(callback, user_service)
+    if role is None:
+        return
+    await state.set_state(PublishWizard.waiting_title)
+    await state.update_data(content_type="screenshots")
+    await callback.answer()
+    await callback.message.answer(
+        "📸 <b>Создание скриншота</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Введите <b>заголовок</b> скриншота (до 100 символов):\n\n"
+        "<i>Отправьте /cancel для отмены</i>",
+        reply_markup=MAIN_KEYBOARD,
+    )
 
 
 @router.callback_query(F.data == AdminBtn.MEMBERS)

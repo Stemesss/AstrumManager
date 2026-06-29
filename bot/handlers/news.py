@@ -8,7 +8,7 @@
 """
 import logging
 
-from aiogram import Bot, F, Router
+from aiogram import F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -24,9 +24,9 @@ from bot.models.audit import AuditAction
 from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
-from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
-from bot.states.news import NewsCreate, NewsEdit
+from bot.states.news import NewsEdit
+from bot.states.publish import PublishWizard
 from bot.utils.roles import role_label
 
 router = Router()
@@ -176,10 +176,11 @@ async def cb_news_create(
         await callback.answer("🔒 Недостаточно прав.", show_alert=True)
         return
 
-    await state.set_state(NewsCreate.waiting_title)
+    await state.set_state(PublishWizard.waiting_title)
+    await state.update_data(content_type="news")
     await callback.answer()
     await callback.message.answer(
-        "✏️ <b>Создание новости</b>\n"
+        "📰 <b>Создание новости</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Введите <b>заголовок</b> новости (до {_MAX_TITLE_LEN} символов):\n\n"
         "<i>Отправьте /cancel для отмены</i>",
@@ -187,99 +188,6 @@ async def cb_news_create(
     )
 
 
-@router.message(NewsCreate.waiting_title)
-async def fsm_news_title(
-    message: Message,
-    state: FSMContext,
-) -> None:
-    """Принимает заголовок новости."""
-    if not message.text or message.text.startswith("/"):
-        await message.answer("⚠️ Пожалуйста, введите заголовок текстом.")
-        return
-    title = message.text.strip()
-    if len(title) > _MAX_TITLE_LEN:
-        await message.answer(
-            f"⚠️ Заголовок слишком длинный (максимум {_MAX_TITLE_LEN} символов). "
-            "Попробуйте ещё раз."
-        )
-        return
-
-    await state.update_data(title=title)
-    await state.set_state(NewsCreate.waiting_content)
-    await message.answer(
-        f"📝 Заголовок сохранён: <b>{title}</b>\n\n"
-        f"Теперь введите <b>текст</b> новости (до {_MAX_CONTENT_LEN} символов):\n\n"
-        "<i>Отправьте /cancel для отмены</i>",
-    )
-
-
-@router.message(NewsCreate.waiting_content)
-async def fsm_news_content(
-    message: Message,
-    state: FSMContext,
-    bot: Bot,
-    news_service: NewsService,
-    user_service: UserService,
-    audit_service: AuditService,
-    topic_service: TopicService,
-) -> None:
-    """Принимает текст новости, сохраняет и публикует в ветку 📰 Новости."""
-    if not message.text or message.text.startswith("/"):
-        await message.answer("⚠️ Пожалуйста, введите текст новости.")
-        return
-    content = message.text.strip()
-    if len(content) > _MAX_CONTENT_LEN:
-        await message.answer(
-            f"⚠️ Текст слишком длинный (максимум {_MAX_CONTENT_LEN} символов). "
-            "Попробуйте ещё раз."
-        )
-        return
-
-    data = await state.get_data()
-    title = data["title"]
-    author_id = message.from_user.id
-    author_name = message.from_user.first_name or "Автор"
-    if message.from_user.username:
-        author_name = f"@{message.from_user.username}"
-
-    item = await news_service.create(title, content, author_id, author_name)
-    await state.clear()
-
-    logger.info("Пользователь %s создал новость #%d: %r", author_id, item.id, title)
-
-    # Журнал: создание новости
-    actor_nick = await user_service.get_game_nick(author_id) or author_name
-    actor_role = await user_service.get_role(author_id)
-    await audit_service.log(
-        user_id=author_id,
-        game_nick=actor_nick,
-        role=actor_role,
-        action_type=AuditAction.NEWS_CREATE,
-        description=f"{role_label(actor_role)} {actor_nick} создал новость «{title}»",
-    )
-
-    # ── Подтверждение администратору ──────────────────────────────────────
-    await message.answer(
-        f"✅ <b>Новость опубликована!</b>\n\n"
-        f"<b>{item.title}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{item.content[:200]}{'…' if len(item.content) > 200 else ''}\n\n"
-        f"📅 {_format_date(item.created_at)}",
-    )
-
-    # ── Публикация в ветку «📰 Новости» группы ────────────────────────────
-    group_text = (
-        f"📰 <b>{item.title}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"{item.content}\n\n"
-        f"📅 {_format_date(item.created_at)}  •  ✍️ {item.author_name}"
-    )
-    ok = await topic_service.publish(bot, "news", group_text)
-    if not ok:
-        await message.answer(
-            "⚠️ Новость сохранена, но <b>не удалось опубликовать в группу</b>.\n"
-            "Проверьте, что бот добавлен в группу и имеет право отправки сообщений."
-        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -561,11 +469,10 @@ async def cb_pin(
 
 @router.message(
     Command("cancel"),
-    StateFilter(NewsCreate.waiting_title, NewsCreate.waiting_content,
-                NewsEdit.waiting_title, NewsEdit.waiting_content),
+    StateFilter(NewsEdit.waiting_title, NewsEdit.waiting_content),
 )
 async def handle_cancel(message: Message, state: FSMContext) -> None:
-    """Отменяет текущий процесс создания/редактирования новости."""
+    """Отменяет текущий процесс редактирования новости."""
     await state.clear()
     await message.answer(
         "❌ Действие отменено.\n\nВыберите раздел в главном меню.",
