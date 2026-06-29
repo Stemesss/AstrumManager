@@ -1,1 +1,5 @@
 - [Telegram bot webhook architecture](telegram-bot-webhook.md) — Replit blocks Telegram polling; must use webhook via Node.js proxy to Python bot.
+- [Bot module structure](bot-structure.md) — canonical module layout after the modular refactor (config/, models/, database/, services/, keyboards/, utils/, handlers/)
+- [Git operations in main agent](git-ops.md) — git commit/add are blocked in main agent; only git push (no force) is allowed after checkpoint auto-creates the commit
+- [UserService injection](userservice-injection.md) — UserService injected via dp["user_service"] in build_dispatcher(); handlers receive it as a typed kwarg
+- [Smoke test false errors](smoke-test-errors.md) — TelegramBadRequest "chat not found" in logs after smoke tests is expected; fake chat IDs can't receive replies

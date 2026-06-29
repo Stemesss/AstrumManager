@@ -12,8 +12,10 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 
 from bot.config import load_config
-from bot.handlers import common, echo
+from bot.database.db import Database
+from bot.handlers import admin, common, echo, menu
 from bot.middlewares.logging import LoggingMiddleware
+from bot.services.user_service import UserService
 
 WEBHOOK_PATH = "/api/telegram/webhook"
 
@@ -46,42 +48,62 @@ def resolve_public_host() -> str | None:
     return None
 
 
-async def on_startup(bot: Bot, webhook_url: str, **_kwargs) -> None:
+async def on_startup(bot: Bot, db: Database, webhook_url: str, **_kwargs) -> None:
     logger = logging.getLogger(__name__)
+    await db.connect()
     logger.info("Регистрация вебхука → %s", webhook_url)
     await bot.set_webhook(webhook_url, drop_pending_updates=True)
     logger.info("Вебхук успешно зарегистрирован")
 
 
-async def on_shutdown(bot: Bot, **_kwargs) -> None:
+async def on_shutdown(bot: Bot, db: Database, **_kwargs) -> None:
     await bot.delete_webhook()
+    await db.close()
     logging.getLogger(__name__).info("Вебхук удалён")
 
 
-def build_dispatcher(bot: Bot) -> Dispatcher:
+async def on_startup_polling(bot: Bot, db: Database, **_kwargs) -> None:
+    await db.connect()
+    me = await bot.get_me()
+    logging.getLogger(__name__).info(
+        "Режим polling — @%s (id=%s)", me.username, me.id
+    )
+
+
+async def on_shutdown_polling(db: Database, **_kwargs) -> None:
+    await db.close()
+
+
+def build_dispatcher(db: Database) -> Dispatcher:
+    """Создаёт диспетчер с маршрутизатором и внедрением зависимостей."""
     dp = Dispatcher()
+
+    # Внедряем сервисы в контекст всех обработчиков
+    user_service = UserService(db)
+    dp["user_service"] = user_service
+    dp["db"] = db
+
+    # Промежуточный слой логирования
     dp.update.middleware(LoggingMiddleware())
+
+    # Порядок важен: специализированные роутеры до универсального echo
     dp.include_router(common.router)
+    dp.include_router(admin.router)
+    dp.include_router(menu.router)
     dp.include_router(echo.router)
+
     return dp
 
 
-async def run_polling(bot: Bot, dp: Dispatcher) -> None:
-    logger = logging.getLogger(__name__)
-    me = await bot.get_me()
-    logger.info("Режим polling — @%s (id=%s)", me.username, me.id)
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
-
-
-def run_webhook(bot: Bot, dp: Dispatcher, public_host: str) -> None:
+def run_webhook(bot: Bot, dp: Dispatcher, db: Database, public_host: str) -> None:
     logger = logging.getLogger(__name__)
     webhook_url = f"{public_host}{WEBHOOK_PATH}"
 
     # На Railway используется $PORT; на Replit — порт 6000 (за Node-прокси)
     port = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", "6000")))
 
-    dp.startup.register(partial(on_startup, bot=bot, webhook_url=webhook_url))
-    dp.shutdown.register(partial(on_shutdown, bot=bot))
+    dp.startup.register(partial(on_startup, bot=bot, db=db, webhook_url=webhook_url))
+    dp.shutdown.register(partial(on_shutdown, bot=bot, db=db))
 
     app = web.Application()
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
@@ -89,6 +111,12 @@ def run_webhook(bot: Bot, dp: Dispatcher, public_host: str) -> None:
 
     logger.info("Запуск вебхук-сервера на 0.0.0.0:%d, путь %s", port, WEBHOOK_PATH)
     web.run_app(app, host="0.0.0.0", port=port)
+
+
+async def run_polling(bot: Bot, dp: Dispatcher, db: Database) -> None:
+    dp.startup.register(partial(on_startup_polling, bot=bot, db=db))
+    dp.shutdown.register(partial(on_shutdown_polling, db=db))
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
 def main() -> None:
@@ -99,17 +127,18 @@ def main() -> None:
         token=config.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = build_dispatcher(bot)
+    db = Database(config.db_path)
+    dp = build_dispatcher(db)
 
     public_host = resolve_public_host()
 
     if public_host:
-        run_webhook(bot, dp, public_host)
+        run_webhook(bot, dp, db, public_host)
     else:
         logging.getLogger(__name__).info(
             "Публичный хост не найден — запуск в режиме polling (локальная разработка)"
         )
-        asyncio.run(run_polling(bot, dp))
+        asyncio.run(run_polling(bot, dp, db))
 
 
 if __name__ == "__main__":
