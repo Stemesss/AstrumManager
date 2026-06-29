@@ -3,10 +3,8 @@
 Обработчик раздела «📋 Журнал действий» (Audit Log).
 
 Доступ:
-  👑 Лидер      — полный: просмотр + поиск + очистка
-  ⭐ Дитя клана  — просмотр + поиск
-  🛡️ Старейшина  — только просмотр
-  👤 Участник    — доступа нет
+  👑 Лидер, ⭐ Дитя клана, 🛡️ Старейшина — полный доступ (просмотр + поиск + очистка)
+  👤 Участник — доступа нет
 """
 import logging
 
@@ -31,8 +29,8 @@ from bot.states.audit import AuditSearch
 router = Router()
 logger = logging.getLogger(__name__)
 
-_VIEW_ROLES   = {UserRole.LEADER, UserRole.CLAN_CHILD, UserRole.ELDER}
-_SEARCH_ROLES = {UserRole.LEADER, UserRole.CLAN_CHILD}
+# Все три административные роли имеют одинаковые права в журнале
+_ADMIN_ROLES = UserRole.admin_roles()
 
 _MENU_TEXT = (
     "━━━━━━━━━━━━━━━━━━━━\n"
@@ -90,10 +88,10 @@ async def handle_audit_menu(
     if not message.from_user:
         return
     role = await user_service.get_role(message.from_user.id)
-    if role not in _VIEW_ROLES:
+    if role not in _ADMIN_ROLES:
         await message.answer(
             "🔒 <b>Доступ запрещён</b>\n\n"
-            "Раздел «Журнал действий» доступен только Лидерам, Дитя клана и Старейшинам."
+            "Раздел «Журнал действий» доступен только администраторам клана."
         )
         return
     await message.answer(_MENU_TEXT, reply_markup=audit_menu_kb(role))
@@ -119,12 +117,12 @@ async def cb_audit_view(
     user_service: UserService,
     audit_service: AuditService,
 ) -> None:
-    parts = callback.data.split(":")   # ["alog", "cat", category, page]
+    parts = callback.data.split(":")
     category = parts[2]
     page = int(parts[3])
 
     role = await user_service.get_role(callback.from_user.id)
-    if role not in _VIEW_ROLES:
+    if role not in _ADMIN_ROLES:
         await callback.answer("🔒 Доступ запрещён.", show_alert=True)
         return
 
@@ -150,7 +148,6 @@ async def cb_audit_view(
 
 @router.callback_query(F.data == "alog:noop")
 async def cb_noop(callback: CallbackQuery) -> None:
-    """Заглушка для кнопки-счётчика страниц."""
     await callback.answer()
 
 
@@ -165,10 +162,8 @@ async def cb_audit_search_start(
     state: FSMContext,
 ) -> None:
     role = await user_service.get_role(callback.from_user.id)
-    if role not in _SEARCH_ROLES:
-        await callback.answer(
-            "🔒 Поиск доступен Лидеру и Дитя клана.", show_alert=True
-        )
+    if role not in _ADMIN_ROLES:
+        await callback.answer("🔒 Недостаточно прав.", show_alert=True)
         return
     await state.set_state(AuditSearch.waiting_query)
     await callback.answer()
@@ -221,7 +216,7 @@ async def handle_cancel_search(message: Message, state: FSMContext) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Очистка журнала  (только Лидер)
+# Очистка журнала  (все административные роли)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "alog:clear")
@@ -230,8 +225,8 @@ async def cb_audit_clear_confirm(
     user_service: UserService,
 ) -> None:
     role = await user_service.get_role(callback.from_user.id)
-    if role != UserRole.LEADER:
-        await callback.answer("🔒 Только для Лидера.", show_alert=True)
+    if role not in _ADMIN_ROLES:
+        await callback.answer("🔒 Недостаточно прав.", show_alert=True)
         return
     await callback.answer()
     await callback.message.edit_text(
@@ -249,12 +244,13 @@ async def cb_audit_clear_execute(
     audit_service: AuditService,
 ) -> None:
     role = await user_service.get_role(callback.from_user.id)
-    if role != UserRole.LEADER:
-        await callback.answer("🔒 Только для Лидера.", show_alert=True)
+    if role not in _ADMIN_ROLES:
+        await callback.answer("🔒 Недостаточно прав.", show_alert=True)
         return
     deleted = await audit_service.clear()
     logger.info(
-        "Лидер %s очистил журнал аудита (%d записей)", callback.from_user.id, deleted
+        "%s %s очистил журнал аудита (%d записей)",
+        role.value, callback.from_user.id, deleted,
     )
     await callback.answer(f"🗑 Удалено записей: {deleted}", show_alert=True)
     await callback.message.edit_text(

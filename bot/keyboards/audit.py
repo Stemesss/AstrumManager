@@ -6,7 +6,10 @@ from bot.models.user import UserRole
 
 
 def audit_menu_kb(role: UserRole) -> InlineKeyboardMarkup:
-    """Главное меню журнала (набор кнопок зависит от роли)."""
+    """
+    Главное меню журнала.
+    Кнопка «Очистить» показывается всем административным ролям.
+    """
     rows = [
         [InlineKeyboardButton(text="📋 Последние действия", callback_data="alog:cat:recent:0")],
         [
@@ -23,7 +26,7 @@ def audit_menu_kb(role: UserRole) -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton(text="📖 Все записи",   callback_data="alog:cat:all:0")],
     ]
-    if role == UserRole.LEADER:
+    if role in UserRole.admin_roles():
         rows.append([
             InlineKeyboardButton(text="🗑 Очистить журнал", callback_data="alog:clear"),
         ])

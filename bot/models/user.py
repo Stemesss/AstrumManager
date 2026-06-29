@@ -13,8 +13,8 @@ class UserRole(str, Enum):
 
     @classmethod
     def admin_roles(cls) -> set["UserRole"]:
-        """Роли с доступом к административному разделу."""
-        return {cls.LEADER, cls.ELDER}
+        """Роли с административным доступом (одинаковые права)."""
+        return {cls.LEADER, cls.CLAN_CHILD, cls.ELDER}
 
     @classmethod
     def from_str(cls, value: str) -> "UserRole":

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Клавиатура панели администратора (только для Лидера)."""
+"""Клавиатура панели администрации (для всех административных ролей)."""
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
