@@ -46,3 +46,15 @@ channel = "stable-25_05"
 
 [userenv.shared]
 BOT_OWNER_ID = "8490615925"
+
+[[ports]]
+localPort = 6000
+externalPort = 6000
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80

@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, audit, common, echo, group, menu, news, nick, setrole, stats, statistics, topics
+from bot.handlers import admin, audit, common, debug, echo, group, menu, news, nick, setrole, stats, statistics, topics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
@@ -107,6 +107,9 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
 
     # ── Промежуточный слой ────────────────────────────────────────────────
     dp.update.middleware(LoggingMiddleware())
+
+    # ── Временный отладочный роутер (все типы чатов) — удалить после проверки веток
+    dp.include_router(debug.router)
 
     # ── Групповой роутер (группы / супергруппы) ───────────────────────────
     dp.include_router(group.router)
