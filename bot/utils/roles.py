@@ -5,7 +5,7 @@ from bot.models.user import UserRole
 # Иконки в порядке иерархии: Лидер → Дитя клана → Старейшина → Участник
 _ROLE_ICONS: dict[UserRole, str] = {
     UserRole.LEADER: "👑",
-    UserRole.CLAN_CHILD: "🌟",
+    UserRole.CLAN_CHILD: "⭐",
     UserRole.ELDER: "🛡️",
     UserRole.MEMBER: "👤",
 }
