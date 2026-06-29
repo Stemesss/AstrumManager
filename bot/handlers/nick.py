@@ -4,7 +4,7 @@
 
 Потоки:
   NickSetup  — срабатывает на /start у пользователя без ника
-  NickChange — срабатывает по callback «nick:change» из настроек
+  NickChange — срабатывает по callback «nick:change» из профиля
 """
 import logging
 
@@ -16,7 +16,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards.main_menu import MAIN_KEYBOARD
 from bot.services.user_service import UserService
 from bot.states.nick import NickChange, NickSetup
-from bot.utils.roles import role_label
+from bot.utils.profile import SETTINGS_KB, build_profile_card
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -26,9 +26,7 @@ _MAX_LEN = 24
 
 
 def _validate_nick(text: str) -> str | None:
-    """
-    Возвращает очищенный ник или None если он не прошёл валидацию.
-    """
+    """Возвращает очищенный ник или None, если не прошёл валидацию."""
     nick = text.strip()
     if len(nick) < _MIN_LEN or len(nick) > _MAX_LEN:
         return None
@@ -48,7 +46,7 @@ async def fsm_nick_setup(
     """Принимает игровой ник при первом запуске."""
     if not message.text or message.text.startswith("/"):
         await message.answer(
-            "⚠️ Пожалуйста, введи свой <b>игровой ник</b> текстом "
+            f"⚠️ Напишите игровой ник одним сообщением "
             f"(от {_MIN_LEN} до {_MAX_LEN} символов):"
         )
         return
@@ -63,18 +61,11 @@ async def fsm_nick_setup(
 
     await user_service.set_game_nick(message.from_user.id, nick)
     await state.clear()
-
-    role = await user_service.get_role(message.from_user.id)
     logger.info("Пользователь %s установил ник %r", message.from_user.id, nick)
 
     await message.answer(
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "⚜️ <b>AstrumManager</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"✅ Ник сохранён: <b>{nick}</b>\n\n"
-        f"🌌 Добро пожаловать в клан <b>Astrum</b>!\n"
-        f"🏅 Твоя роль: {role_label(role)}\n\n"
-        "Выбери нужный раздел в меню.",
+        f"✅ <b>Ник успешно сохранён!</b>\n\n"
+        f"Добро пожаловать в Astrum, <b>{nick}</b>!",
         reply_markup=MAIN_KEYBOARD,
     )
 
@@ -87,21 +78,11 @@ async def fsm_nick_setup(
 async def cb_nick_change(
     callback: CallbackQuery,
     state: FSMContext,
-    user_service: UserService,
 ) -> None:
     """Запускает FSM смены ника из профиля."""
-    current = await user_service.get_game_nick(callback.from_user.id)
     await state.set_state(NickChange.waiting_nick)
     await callback.answer()
-
-    current_line = f"Текущий ник: <b>{current}</b>\n\n" if current else ""
-    await callback.message.answer(
-        "✏️ <b>Смена игрового ника</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"{current_line}"
-        f"Введи новый игровой ник ({_MIN_LEN}–{_MAX_LEN} символов):\n\n"
-        "<i>Отправь /cancel для отмены</i>",
-    )
+    await callback.message.answer("Введите новый игровой ник.")
 
 
 @router.message(NickChange.waiting_nick)
@@ -110,10 +91,10 @@ async def fsm_nick_change(
     state: FSMContext,
     user_service: UserService,
 ) -> None:
-    """Принимает и сохраняет новый ник."""
+    """Принимает новый ник, сохраняет и показывает обновлённый профиль."""
     if not message.text or message.text.startswith("/"):
         await message.answer(
-            "⚠️ Пожалуйста, введи новый <b>игровой ник</b> текстом "
+            f"⚠️ Напишите новый ник одним сообщением "
             f"(от {_MIN_LEN} до {_MAX_LEN} символов):"
         )
         return
@@ -128,12 +109,15 @@ async def fsm_nick_change(
 
     await user_service.set_game_nick(message.from_user.id, nick)
     await state.clear()
-
     logger.info("Пользователь %s сменил ник на %r", message.from_user.id, nick)
+
+    role = await user_service.get_role(message.from_user.id)
+    stats = await user_service.get_profile_stats(message.from_user.id)
+
     await message.answer(
         f"✅ <b>Ник успешно изменён!</b>\n\n"
-        f"👤 Новый ник: <b>{nick}</b>",
-        reply_markup=MAIN_KEYBOARD,
+        + build_profile_card(nick, role, stats),
+        reply_markup=SETTINGS_KB,
     )
 
 

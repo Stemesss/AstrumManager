@@ -3,21 +3,17 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import Message
 
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
 from bot.services.user_service import UserService
+from bot.utils.profile import SETTINGS_KB, build_profile_card
 from bot.utils.roles import role_label
-from bot.utils.text import pluralize_days
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 _WIP = "🚧 Раздел находится в разработке."
-
-_SETTINGS_KB = InlineKeyboardMarkup(inline_keyboard=[[
-    InlineKeyboardButton(text="✏️ Изменить ник", callback_data="nick:change"),
-]])
 
 
 # ------------------------------------------------------------------ #
@@ -60,7 +56,7 @@ async def handle_members(message: Message, user_service: UserService) -> None:
 
 @router.message(F.text == BTN.SETTINGS)
 async def handle_settings(message: Message, user_service: UserService) -> None:
-    """Показывает профиль пользователя с актуальными данными из БД."""
+    """Показывает карточку профиля пользователя."""
     if not message.from_user:
         return
 
@@ -69,22 +65,9 @@ async def handle_settings(message: Message, user_service: UserService) -> None:
     stats = await user_service.get_profile_stats(message.from_user.id)
 
     nick_str = user.game_nick or "<i>не задан</i>"
-
     await message.answer(
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "⚜️ <b>AstrumManager</b>\n"
-        "👤 <b>Личный профиль</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"👤 <b>Ник:</b> {nick_str}\n\n"
-        f"🏅 <b>Роль:</b> {role_label(role)}\n\n"
-        f"📅 <b>В клане:</b> {pluralize_days(stats['days_in_clan'])}\n"
-        f"📚 <b>Создано гайдов:</b> {stats['guides_count']}\n"
-        f"📸 <b>Загружено скриншотов:</b> {stats['screenshots_count']}\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "🟢 <b>Статус:</b> Онлайн\n\n"
-        "✏️ Изменить ник\n\n"
-        "━━━━━━━━━━━━━━━━━━━━",
-        reply_markup=_SETTINGS_KB,
+        build_profile_card(nick_str, role, stats),
+        reply_markup=SETTINGS_KB,
     )
 
 

@@ -11,13 +11,11 @@ from aiogram.types import Message
 from bot.keyboards.main_menu import MAIN_KEYBOARD
 from bot.services.user_service import UserService
 from bot.states.nick import NickSetup
-from bot.utils.roles import role_label
 from bot.utils.text import greeting_by_hour
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Московское время UTC+3 — стандартная зона сообщества Astrum
 _MSK = timezone(timedelta(hours=3))
 
 
@@ -29,8 +27,8 @@ async def handle_start(
 ) -> None:
     """
     Регистрирует пользователя.
-    - Новый пользователь (нет ника) → запрашивает игровой ник.
-    - Зарегистрированный → умное приветствие по времени суток + главное меню.
+    - Без ника → запрашивает игровой ник (FSM NickSetup).
+    - С ником → умное приветствие по времени суток + главное меню.
     """
     if not message.from_user:
         return
@@ -39,19 +37,18 @@ async def handle_start(
     user = await user_service.get_or_create(message.from_user)
 
     if not user.game_nick:
-        # Первый запуск — запрашиваем ник перед показом меню
         await state.set_state(NickSetup.waiting_nick)
         logger.info("Новый пользователь %s — запрос игрового ника", user.telegram_id)
         await message.answer(
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚜️ <b>AstrumManager</b>\n"
-            "Добро пожаловать!\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "Привет! 👋\n\n"
-            "Похоже, ты здесь впервые.\n\n"
-            "Прежде чем начать, введи свой игровой ник.\n\n"
+            "👋 Добро пожаловать!\n\n"
+            "Для использования бота необходимо указать свой игровой ник.\n\n"
+            "Напишите ваш игровой ник одним сообщением.\n\n"
             "Например:\n"
-            "<code>Stemessss</code>",
+            "<code>Stemess</code>\n\n"
+            "<b>Введите ник:</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━",
         )
         return
 
@@ -59,7 +56,7 @@ async def handle_start(
     header, greeting_word, emoji = greeting_by_hour(now.hour)
 
     logger.info(
-        "Пользователь %s (%s) запустил бота — %s (МСК %02d:00)",
+        "Пользователь %s (%s) запустил бота — %s (МСК %02d:xx)",
         user.telegram_id, user.game_nick, greeting_word, now.hour,
     )
     await message.answer(
