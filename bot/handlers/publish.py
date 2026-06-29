@@ -7,19 +7,23 @@
 Сценарий:
   1. Внешний обработчик устанавливает состояние PublishWizard.waiting_title
      и кладёт в FSM data: {"content_type": "<тип>"}
-  2. Мастер собирает заголовок → текст → показывает предпросмотр.
-  3. Inline-кнопки: Опубликовать / Изменить заголовок / Изменить текст / Закрыть.
+  2. Мастер собирает заголовок → текст → вложения (необязательно) → предпросмотр.
+  3. Inline-кнопки предпросмотра:
+       Опубликовать / Добавить ещё / Удалить вложения /
+       Изменить заголовок / Изменить текст / Закрыть
 """
 import datetime
 import logging
+import re
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from bot.database.db import Database
 from bot.keyboards.main_menu import MAIN_KEYBOARD
-from bot.keyboards.publish import PREVIEW_KB, PublishBtn
+from bot.keyboards.publish import ATTACH_KB, PREVIEW_KB, PublishBtn
 from bot.models.audit import AuditAction
 from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
@@ -34,45 +38,99 @@ logger = logging.getLogger(__name__)
 
 _MAX_TITLE   = 100
 _MAX_CONTENT = 4000
+_URL_RE      = re.compile(r"https?://\S+")
 
 # ── Конфигурация типов публикаций ─────────────────────────────────────────────
 
 _TYPES: dict[str, dict] = {
     "news": {
-        "icon":       "📰",
-        "label":      "Новость",
-        "topic":      "news",
-        "audit":      AuditAction.NEWS_CREATE,
-        "verb":       "создал новость",
-        "uses_db":    True,
+        "icon":    "📰",
+        "label":   "Новость",
+        "topic":   "news",
+        "audit":   AuditAction.NEWS_CREATE,
+        "verb":    "создал новость",
+        "uses_db": True,
     },
     "events": {
-        "icon":       "📅",
-        "label":      "Событие",
-        "topic":      "events",
-        "audit":      AuditAction.EVENT_CREATE,
-        "verb":       "создал событие",
-        "uses_db":    False,
+        "icon":    "📅",
+        "label":   "Событие",
+        "topic":   "events",
+        "audit":   AuditAction.EVENT_CREATE,
+        "verb":    "создал событие",
+        "uses_db": False,
     },
     "guides": {
-        "icon":       "📚",
-        "label":      "Гайд",
-        "topic":      "guides",
-        "audit":      AuditAction.GUIDE_CREATE,
-        "verb":       "создал гайд",
-        "uses_db":    False,
+        "icon":    "📚",
+        "label":   "Гайд",
+        "topic":   "guides",
+        "audit":   AuditAction.GUIDE_CREATE,
+        "verb":    "создал гайд",
+        "uses_db": False,
     },
     "screenshots": {
-        "icon":       "📸",
-        "label":      "Скриншот",
-        "topic":      "screenshots",
-        "audit":      AuditAction.SCREENSHOT_UPLOAD,
-        "verb":       "загрузил скриншот",
-        "uses_db":    False,
+        "icon":    "📸",
+        "label":   "Скриншот",
+        "topic":   "screenshots",
+        "audit":   AuditAction.SCREENSHOT_UPLOAD,
+        "verb":    "загрузил скриншот",
+        "uses_db": False,
     },
 }
 
-# ── Вспомогательные функции ───────────────────────────────────────────────────
+# ── Хелперы для вложений ──────────────────────────────────────────────────────
+
+def _empty_attachments() -> dict:
+    return {"photos": [], "videos": [], "documents": [], "links": []}
+
+
+def _has_attachments(a: dict) -> bool:
+    return bool(a.get("photos") or a.get("videos") or a.get("documents") or a.get("links"))
+
+
+def _build_attach_prompt(attachments: dict) -> str:
+    lines = [
+        "━━━━━━━━━━━━━━━━━━━━",
+        "📎 <b>Вложения</b>",
+        "━━━━━━━━━━━━━━━━━━━━\n",
+        "Прикрепите вложения к публикации:\n",
+        "🖼 Отправьте фото (одно или несколько)",
+        "🎥 Отправьте видео",
+        "📄 Отправьте документ (PDF, DOCX, ZIP…)",
+        "🔗 Вставьте ссылку текстом\n",
+    ]
+    if _has_attachments(attachments):
+        lines.append("📦 <b>Добавлено:</b>")
+        if p := len(attachments.get("photos", [])):
+            lines.append(f"  🖼 Фото: {p}")
+        if v := len(attachments.get("videos", [])):
+            lines.append(f"  🎥 Видео: {v}")
+        if d := len(attachments.get("documents", [])):
+            lines.append(f"  📄 Документы: {d}")
+        if lk := len(attachments.get("links", [])):
+            lines.append(f"  🔗 Ссылки: {lk}")
+        lines.append("")
+    lines.append("Нажмите <b>✅ Готово</b> для перехода к предпросмотру.")
+    lines.append("<i>Или /cancel для отмены.</i>")
+    return "\n".join(lines)
+
+
+def _build_attach_summary(attachments: dict) -> str:
+    """Блок вложений для предпросмотра."""
+    if not _has_attachments(attachments):
+        return ""
+    lines = ["━━━━━━━━━━━━━━━━━━━━\n\n📎 <b>Вложения</b>"]
+    if p := len(attachments.get("photos", [])):
+        lines.append(f"🖼 Фото: {p}")
+    if v := len(attachments.get("videos", [])):
+        lines.append(f"🎥 Видео: {v}")
+    if d := len(attachments.get("documents", [])):
+        lines.append(f"📄 Документы: {d}")
+    if lk := len(attachments.get("links", [])):
+        lines.append(f"🔗 Ссылки: {lk}")
+    return "\n".join(lines)
+
+
+# ── Хелперы форматирования ────────────────────────────────────────────────────
 
 def _format_date(dt: datetime.datetime | None) -> str:
     if dt is None:
@@ -80,8 +138,14 @@ def _format_date(dt: datetime.datetime | None) -> str:
     return dt.strftime("%d.%m.%Y %H:%M")
 
 
-def _build_preview(icon: str, label: str, title: str, content: str) -> str:
-    return (
+def _build_preview(
+    icon: str,
+    label: str,
+    title: str,
+    content: str,
+    attachments: dict | None = None,
+) -> str:
+    text = (
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"{icon} <b>Предпросмотр — {label}</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -90,10 +154,15 @@ def _build_preview(icon: str, label: str, title: str, content: str) -> str:
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "📄 <b>Текст</b>\n"
         f"{content}\n\n"
+    )
+    if attachments and _has_attachments(attachments):
+        text += _build_attach_summary(attachments) + "\n\n"
+    text += (
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "Проверьте информацию перед публикацией.\n"
         "━━━━━━━━━━━━━━━━━━━━"
     )
+    return text
 
 
 def _author_name(user) -> str:
@@ -130,7 +199,7 @@ async def handle_waiting_title(message: Message, state: FSMContext) -> None:
     )
 
 
-# ── Шаг 2: текст → предпросмотр ──────────────────────────────────────────────
+# ── Шаг 2: текст → шаг вложений ──────────────────────────────────────────────
 
 @router.message(PublishWizard.waiting_content)
 async def handle_waiting_content(message: Message, state: FSMContext) -> None:
@@ -145,25 +214,158 @@ async def handle_waiting_content(message: Message, state: FSMContext) -> None:
         )
         return
 
-    data = await state.get_data()
-    await state.update_data(content=content)
-    await state.set_state(PublishWizard.preview)
+    await state.update_data(content=content, attachments=_empty_attachments())
+    await state.set_state(PublishWizard.waiting_attachments)
 
-    cfg   = _TYPES.get(data.get("content_type", "news"), _TYPES["news"])
-    title = data.get("title", "")
-    await message.answer(
-        _build_preview(cfg["icon"], cfg["label"], title, content),
+    sent = await message.answer(
+        _build_attach_prompt(_empty_attachments()),
+        reply_markup=ATTACH_KB,
+    )
+    await state.update_data(attach_msg_id=sent.message_id)
+
+
+# ── Шаг 3: сбор вложений ─────────────────────────────────────────────────────
+
+@router.message(PublishWizard.waiting_attachments)
+async def handle_waiting_attachments(message: Message, state: FSMContext, bot: Bot) -> None:
+    data        = await state.get_data()
+    attachments = data.get("attachments") or _empty_attachments()
+    added       = ""
+
+    if message.photo:
+        photo = message.photo[-1]
+        attachments["photos"].append({
+            "file_id":        photo.file_id,
+            "file_unique_id": photo.file_unique_id,
+        })
+        added = f"🖼 Фото добавлено. Всего фото: {len(attachments['photos'])}"
+
+    elif message.video:
+        v = message.video
+        attachments["videos"].append({
+            "file_id":        v.file_id,
+            "file_unique_id": v.file_unique_id,
+        })
+        added = f"🎥 Видео добавлено. Всего видео: {len(attachments['videos'])}"
+
+    elif message.document:
+        d = message.document
+        attachments["documents"].append({
+            "file_id":        d.file_id,
+            "file_unique_id": d.file_unique_id,
+            "file_name":      d.file_name or "",
+        })
+        added = f"📄 Документ добавлен. Всего: {len(attachments['documents'])}"
+
+    elif message.text and not message.text.startswith("/"):
+        urls = _URL_RE.findall(message.text)
+        if urls:
+            attachments["links"].extend(urls)
+            added = f"🔗 Ссылок добавлено: {len(urls)}. Всего: {len(attachments['links'])}"
+        else:
+            await message.answer(
+                "⚠️ Не распознан тип вложения.\n"
+                "Отправьте фото, видео, документ или ссылку (http/https)."
+            )
+            return
+    else:
+        await message.answer(
+            "⚠️ Не распознан тип вложения.\n"
+            "Отправьте фото, видео, документ или ссылку (http/https)."
+        )
+        return
+
+    await state.update_data(attachments=attachments)
+
+    # Обновляем сообщение-приглашение с актуальным счётчиком
+    attach_msg_id = data.get("attach_msg_id")
+    if attach_msg_id:
+        try:
+            await bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=attach_msg_id,
+                text=_build_attach_prompt(attachments),
+                reply_markup=ATTACH_KB,
+            )
+        except Exception:
+            pass  # Сообщение уже удалено или устарело — не страшно
+
+
+# ── Callback: ✅ Готово (шаг вложений) ────────────────────────────────────────
+
+@router.callback_query(F.data == PublishBtn.ATTACH_DONE, PublishWizard.waiting_attachments)
+async def cb_attach_done(callback: CallbackQuery, state: FSMContext) -> None:
+    data        = await state.get_data()
+    attachments = data.get("attachments") or _empty_attachments()
+    cfg         = _TYPES.get(data.get("content_type", "news"), _TYPES["news"])
+
+    await state.set_state(PublishWizard.preview)
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(
+        _build_preview(cfg["icon"], cfg["label"], data.get("title", ""), data.get("content", ""), attachments),
         reply_markup=PREVIEW_KB,
     )
+    await callback.answer()
 
 
-# ── Кнопка: ✅ Опубликовать ───────────────────────────────────────────────────
+# ── Callback: ⏩ Без вложений ─────────────────────────────────────────────────
+
+@router.callback_query(F.data == PublishBtn.ATTACH_SKIP, PublishWizard.waiting_attachments)
+async def cb_attach_skip(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    cfg  = _TYPES.get(data.get("content_type", "news"), _TYPES["news"])
+
+    await state.update_data(attachments=_empty_attachments())
+    await state.set_state(PublishWizard.preview)
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(
+        _build_preview(cfg["icon"], cfg["label"], data.get("title", ""), data.get("content", "")),
+        reply_markup=PREVIEW_KB,
+    )
+    await callback.answer()
+
+
+# ── Callback: 📎 Добавить ещё (из предпросмотра) ──────────────────────────────
+
+@router.callback_query(F.data == PublishBtn.ADD_ATTACHMENTS, PublishWizard.preview)
+async def cb_add_attachments(callback: CallbackQuery, state: FSMContext) -> None:
+    data        = await state.get_data()
+    attachments = data.get("attachments") or _empty_attachments()
+
+    await state.set_state(PublishWizard.waiting_attachments)
+    await callback.message.edit_reply_markup(reply_markup=None)
+
+    sent = await callback.message.answer(
+        _build_attach_prompt(attachments),
+        reply_markup=ATTACH_KB,
+    )
+    await state.update_data(attach_msg_id=sent.message_id)
+    await callback.answer()
+
+
+# ── Callback: 🗑 Удалить вложения ─────────────────────────────────────────────
+
+@router.callback_query(F.data == PublishBtn.CLEAR_ATTACHMENTS, PublishWizard.preview)
+async def cb_clear_attachments(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    cfg  = _TYPES.get(data.get("content_type", "news"), _TYPES["news"])
+
+    await state.update_data(attachments=_empty_attachments())
+    await callback.message.edit_text(
+        _build_preview(cfg["icon"], cfg["label"], data.get("title", ""), data.get("content", "")),
+        reply_markup=PREVIEW_KB,
+    )
+    await callback.answer("🗑 Вложения удалены")
+
+
+# ── Callback: ✅ Опубликовать ─────────────────────────────────────────────────
 
 @router.callback_query(F.data == PublishBtn.CONFIRM, PublishWizard.preview)
 async def cb_confirm(
     callback: CallbackQuery,
     state: FSMContext,
     bot: Bot,
+    db: Database,
     news_service: NewsService,
     user_service: UserService,
     audit_service: AuditService,
@@ -173,6 +375,7 @@ async def cb_confirm(
     content_type = data.get("content_type", "news")
     title        = data.get("title", "")
     content      = data.get("content", "")
+    attachments  = data.get("attachments") or _empty_attachments()
     cfg          = _TYPES.get(content_type, _TYPES["news"])
 
     user        = callback.from_user
@@ -185,20 +388,16 @@ async def cb_confirm(
     await state.clear()
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # ── Публикация в БД (только для новостей) ────────────────────────────
+    # ── Сохранение в БД (только новости) ─────────────────────────────────
+    pub_id: int | None = None
     if cfg["uses_db"]:
-        item = await news_service.create(title, content, author_id, author_name)
+        item   = await news_service.create(title, content, author_id, author_name)
+        pub_id = item.id
         pub_date = item.created_at
-        logger.info(
-            "Пользователь %s создал %s #%d: %r",
-            author_id, content_type, item.id, title,
-        )
+        logger.info("Пользователь %s создал %s #%d: %r", author_id, content_type, item.id, title)
     else:
         pub_date = now
-        logger.info(
-            "Пользователь %s создал %s: %r",
-            author_id, content_type, title,
-        )
+        logger.info("Пользователь %s создал %s: %r", author_id, content_type, title)
 
     # ── Журнал аудита ─────────────────────────────────────────────────────
     await audit_service.log(
@@ -209,30 +408,63 @@ async def cb_confirm(
         description=f"{role_label(actor_role)} {actor_nick} {cfg['verb']} «{title}»",
     )
 
-    # ── Публикация в ветку Telegram ───────────────────────────────────────
+    # ── Сохранение file_id вложений в БД ─────────────────────────────────
+    if _has_attachments(attachments):
+        for p in attachments.get("photos", []):
+            await db.attachment_save(content_type, pub_id, p["file_id"], p["file_unique_id"], "photo")
+        for v in attachments.get("videos", []):
+            await db.attachment_save(content_type, pub_id, v["file_id"], v["file_unique_id"], "video")
+        for d in attachments.get("documents", []):
+            await db.attachment_save(
+                content_type, pub_id, d["file_id"], d["file_unique_id"], "document", d.get("file_name")
+            )
+
+    # ── Текст публикации ──────────────────────────────────────────────────
+    links = attachments.get("links", [])
+    link_block = ("\n\n🔗 " + "\n🔗 ".join(links)) if links else ""
     group_text = (
         f"{cfg['icon']} <b>{title}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"{content}\n\n"
+        f"{content}"
+        f"{link_block}\n\n"
         f"📅 {_format_date(pub_date)}  •  ✍️ {author_name}"
     )
-    ok = await topic_service.publish(bot, cfg["topic"], group_text)
+
+    # ── Публикация в Telegram-ветку ───────────────────────────────────────
+    ok = await topic_service.publish_with_attachments(
+        bot, cfg["topic"], group_text, attachments
+    )
     topic_note = "" if ok else "\n\n⚠️ <i>Не удалось опубликовать в группу.</i>"
 
-    # ── Подтверждение администратору ─────────────────────────────────────
+    # ── Подтверждение администратору ──────────────────────────────────────
+    attach_note = ""
+    if _has_attachments(attachments):
+        parts = []
+        if n := len(attachments.get("photos", [])):
+            parts.append(f"🖼 {n} фото")
+        if n := len(attachments.get("videos", [])):
+            parts.append(f"🎥 {n} видео")
+        if n := len(attachments.get("documents", [])):
+            parts.append(f"📄 {n} доку{'мент' if n == 1 else 'ментов'}")
+        if n := len(attachments.get("links", [])):
+            parts.append(f"🔗 {n} ссылок")
+        attach_note = "\n📎 Вложения: " + ", ".join(parts)
+
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
         f"✅ <b>{cfg['icon']} {cfg['label']} опубликован(а)!</b>\n\n"
         f"<b>{title}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"{content[:200]}{'…' if len(content) > 200 else ''}\n\n"
-        f"📅 {_format_date(pub_date)}{topic_note}",
+        f"📅 {_format_date(pub_date)}"
+        f"{attach_note}"
+        f"{topic_note}",
         reply_markup=MAIN_KEYBOARD,
     )
     await callback.answer()
 
 
-# ── Кнопка: ✏️ Изменить заголовок ────────────────────────────────────────────
+# ── Callback: ✏️ Изменить заголовок ──────────────────────────────────────────
 
 @router.callback_query(F.data == PublishBtn.EDIT_TITLE)
 async def cb_edit_title(callback: CallbackQuery, state: FSMContext) -> None:
@@ -248,7 +480,7 @@ async def cb_edit_title(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-# ── Кнопка: 📝 Изменить текст ────────────────────────────────────────────────
+# ── Callback: 📝 Изменить текст ───────────────────────────────────────────────
 
 @router.callback_query(F.data == PublishBtn.EDIT_CONTENT)
 async def cb_edit_content(callback: CallbackQuery, state: FSMContext) -> None:
@@ -264,7 +496,7 @@ async def cb_edit_content(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-# ── Кнопка: ❌ Закрыть ────────────────────────────────────────────────────────
+# ── Callback: ❌ Закрыть ─────────────────────────────────────────────────────
 
 @router.callback_query(F.data == PublishBtn.CANCEL)
 async def cb_cancel(callback: CallbackQuery, state: FSMContext) -> None:
@@ -284,6 +516,7 @@ async def cb_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     StateFilter(
         PublishWizard.waiting_title,
         PublishWizard.waiting_content,
+        PublishWizard.waiting_attachments,
         PublishWizard.preview,
     ),
 )

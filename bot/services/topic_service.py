@@ -9,7 +9,7 @@ TopicService — управление Telegram Topics (ветками форум
 import logging
 
 from aiogram import Bot
-from aiogram.types import InputMediaPhoto
+from aiogram.types import InputMediaPhoto, InputMediaVideo
 
 from bot.database.db import Database
 from bot.models.topic import ALL_TOPIC_NAMES, DEFAULT_THREAD_IDS, TOPIC_LABELS, ForumTopic
@@ -161,6 +161,104 @@ class TopicService:
         except Exception as exc:
             logger.warning(
                 "Не удалось опубликовать медиагруппу в ветку '%s': %s", label, exc
+            )
+            return False
+
+    async def publish_with_attachments(
+        self,
+        bot: Bot,
+        topic_name: str,
+        text: str,
+        attachments: dict | None = None,
+    ) -> bool:
+        """
+        Публикует текст + вложения (фото, видео, документы) в нужную ветку.
+
+        Логика:
+        - Фото + видео → медиагруппа (или одиночное сообщение), caption = text.
+        - Документы → отдельные send_document после медиагруппы.
+        - Только документы (без медиа) → сначала текст, потом документы.
+        - Нет вложений → обычный publish().
+        """
+        if not attachments or not any(attachments.get(k) for k in ("photos", "videos", "documents")):
+            return await self.publish(bot, topic_name, text)
+
+        thread_id = await self.get_thread_id(topic_name)
+        label = TOPIC_LABELS.get(topic_name, topic_name)
+
+        photos = attachments.get("photos", [])
+        videos = attachments.get("videos", [])
+        docs   = attachments.get("documents", [])
+
+        try:
+            # ── Медиагруппа (фото и видео) ───────────────────────────────────
+            all_media: list = []
+            for i, p in enumerate(photos):
+                caption = text if i == 0 else None
+                pm = "HTML" if caption else None
+                all_media.append(InputMediaPhoto(media=p["file_id"], caption=caption, parse_mode=pm))
+            for i, v in enumerate(videos):
+                idx    = len(photos) + i
+                caption = text if idx == 0 else None
+                pm = "HTML" if caption else None
+                all_media.append(InputMediaVideo(media=v["file_id"], caption=caption, parse_mode=pm))
+
+            if all_media:
+                if len(all_media) == 1:
+                    if photos:
+                        await bot.send_photo(
+                            chat_id=self._chat_id,
+                            photo=photos[0]["file_id"],
+                            caption=text,
+                            message_thread_id=thread_id,
+                            parse_mode="HTML",
+                        )
+                    else:
+                        await bot.send_video(
+                            chat_id=self._chat_id,
+                            video=videos[0]["file_id"],
+                            caption=text,
+                            message_thread_id=thread_id,
+                            parse_mode="HTML",
+                        )
+                else:
+                    await bot.send_media_group(
+                        chat_id=self._chat_id,
+                        media=all_media,
+                        message_thread_id=thread_id,
+                    )
+                # Документы отправляем без caption (текст уже в медиа)
+                for d in docs:
+                    await bot.send_document(
+                        chat_id=self._chat_id,
+                        document=d["file_id"],
+                        message_thread_id=thread_id,
+                    )
+            else:
+                # Только документы: сначала текст, потом файлы
+                await bot.send_message(
+                    chat_id=self._chat_id,
+                    text=text,
+                    message_thread_id=thread_id,
+                    parse_mode="HTML",
+                )
+                for d in docs:
+                    await bot.send_document(
+                        chat_id=self._chat_id,
+                        document=d["file_id"],
+                        message_thread_id=thread_id,
+                    )
+
+            logger.info(
+                "publish_with_attachments '%s' (thread=%s): photos=%d videos=%d docs=%d",
+                label, thread_id, len(photos), len(videos), len(docs),
+            )
+            return True
+
+        except Exception as exc:
+            logger.warning(
+                "publish_with_attachments: не удалось опубликовать в ветку '%s': %s",
+                label, exc,
             )
             return False
 

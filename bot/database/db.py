@@ -53,6 +53,19 @@ CREATE TABLE IF NOT EXISTS forum_topics (
 )
 """
 
+_CREATE_ATTACHMENTS = """
+CREATE TABLE IF NOT EXISTS publication_attachments (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    publication_type TEXT    NOT NULL,
+    publication_id   INTEGER,
+    file_id          TEXT    NOT NULL,
+    file_unique_id   TEXT,
+    file_type        TEXT    NOT NULL,
+    file_name        TEXT,
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
 
 class Database:
     """Обёртка над aiosqlite для хранения данных пользователей."""
@@ -71,6 +84,7 @@ class Database:
         await self._conn.execute(_CREATE_NEWS)
         await self._conn.execute(_CREATE_AUDIT)
         await self._conn.execute(_CREATE_TOPICS)
+        await self._conn.execute(_CREATE_ATTACHMENTS)
         # Миграция: добавляем game_nick для существующих БД (игнорируем если уже есть)
         try:
             await self._conn.execute("ALTER TABLE users ADD COLUMN game_nick TEXT")
@@ -551,5 +565,45 @@ class Database:
         """Список всех сохранённых веток."""
         async with self.conn.execute(
             "SELECT * FROM forum_topics ORDER BY id"
+        ) as cur:
+            return await cur.fetchall()
+
+    # ------------------------------------------------------------------ #
+    # Методы работы с вложениями публикаций (publication_attachments)
+    # ------------------------------------------------------------------ #
+
+    async def attachment_save(
+        self,
+        publication_type: str,
+        publication_id: int | None,
+        file_id: str,
+        file_unique_id: str | None,
+        file_type: str,
+        file_name: str | None = None,
+    ) -> None:
+        """Сохраняет file_id вложения, привязанного к публикации."""
+        await self.conn.execute(
+            """
+            INSERT INTO publication_attachments
+                (publication_type, publication_id, file_id, file_unique_id, file_type, file_name)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (publication_type, publication_id, file_id, file_unique_id, file_type, file_name),
+        )
+        await self.conn.commit()
+
+    async def attachments_by_publication(
+        self,
+        publication_type: str,
+        publication_id: int | None,
+    ) -> list:
+        """Возвращает все вложения конкретной публикации."""
+        async with self.conn.execute(
+            """
+            SELECT * FROM publication_attachments
+            WHERE publication_type = ? AND publication_id IS ?
+            ORDER BY id
+            """,
+            (publication_type, publication_id),
         ) as cur:
             return await cur.fetchall()
