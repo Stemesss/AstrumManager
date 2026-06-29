@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Модель новости клана."""
-from dataclasses import dataclass
+"""Модель новости и контент-записи клана."""
+from dataclasses import dataclass, field
 
 
 @dataclass
 class NewsItem:
-    """Новость клана Astrum."""
+    """Запись любого типа контента (новость, событие, гайд, скриншот)."""
     id: int
     title: str
     content: str
@@ -14,3 +14,4 @@ class NewsItem:
     pinned: bool
     created_at: str
     updated_at: str
+    content_type: str = field(default="news")

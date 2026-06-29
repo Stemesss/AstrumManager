@@ -24,6 +24,7 @@ from bot.keyboards.members import PAGE_SIZE, member_card_kb, members_list_kb, ro
 from bot.models.audit import AuditAction
 from bot.models.user import User, UserRole
 from bot.services.audit_service import AuditService
+from bot.services.stats_service import StatsService
 from bot.services.user_service import UserService
 from bot.utils.roles import ROLE_ORDER, assignable_roles, can_assign, role_label
 from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
@@ -277,18 +278,45 @@ async def cb_mem_set(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Статистика участника (WIP)
+# Статистика участника
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("mem:stats:"))
-async def cb_mem_stats(callback: CallbackQuery, user_service: UserService) -> None:
+async def cb_mem_stats(
+    callback: CallbackQuery,
+    user_service: UserService,
+    stats_service: StatsService,
+) -> None:
     if not await _check_admin(callback, user_service):
         return
     target_id = int(callback.data.split(":")[2])
     u = await _find_user(user_service, target_id)
     nick = _display_name(u) if u else str(target_id)
+
+    days  = await user_service.get_days_in_clan(target_id)
+    stats = await stats_service.user_activity(target_id)
+
+    score   = stats["score"]
+    n_news  = stats["news"]
+    n_guide = stats["guides"]
+    n_shot  = stats["screenshots"]
+    n_event = stats["events"]
+
+    lines = [
+        f"📊 <b>Статистика — {nick}</b>",
+        "",
+        f"🏠 Дней в клане: <b>{days}</b>",
+        f"⚡️ Очки активности: <b>{score}</b>",
+        "",
+        "Публикации:",
+        f"  📰 Новостей: <b>{n_news}</b>",
+        f"  📚 Гайдов: <b>{n_guide}</b>",
+        f"  📅 Событий: <b>{n_event}</b>",
+        f"  📸 Скриншотов: <b>{n_shot}</b>",
+    ]
+
     await callback.answer()
     await callback.message.edit_text(
-        f"📊 <b>Статистика — {nick}</b>\n\n🚧 Раздел в разработке.",
+        "\n".join(lines),
         reply_markup=member_card_kb(target_id),
     )

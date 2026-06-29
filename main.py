@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, audit, common, debug, echo, group, members, menu, news, nick, publish, setrole, stats, statistics, topics
+from bot.handlers import admin, audit, common, content, debug, echo, group, members, menu, news, nick, publish, setrole, stats, statistics, topics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
@@ -136,6 +136,7 @@ def build_dispatcher(
     private.include_router(publish.router)  # мастер публикаций — после news, до admin
     private.include_router(topics.router)  # до admin — перекрывает admin:settings WIP-заглушку
     private.include_router(members.router) # до admin — перехватывает admin:members и admin:roles
+    private.include_router(content.router) # события, гайды, скриншоты
     private.include_router(admin.router)
     private.include_router(stats.router)
     private.include_router(statistics.router)

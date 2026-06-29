@@ -91,6 +91,14 @@ class Database:
             logger.info("Миграция: столбец game_nick добавлен в таблицу users")
         except Exception:
             pass  # Столбец уже существует
+        # Миграция: content_type для разграничения типов записей
+        try:
+            await self._conn.execute(
+                "ALTER TABLE news ADD COLUMN content_type TEXT NOT NULL DEFAULT 'news'"
+            )
+            logger.info("Миграция: столбец content_type добавлен в таблицу news")
+        except Exception:
+            pass  # Столбец уже существует
         await self._conn.commit()
         logger.info("База данных подключена: %s", self._path)
 
@@ -175,24 +183,37 @@ class Database:
     # ------------------------------------------------------------------ #
 
     async def create_news(
-        self, title: str, content: str, author_id: int, author_name: str
+        self,
+        title: str,
+        content: str,
+        author_id: int,
+        author_name: str,
+        content_type: str = "news",
     ) -> int:
-        """Создаёт новость и возвращает её ID."""
+        """Создаёт запись контента и возвращает её ID."""
         async with self.conn.execute(
             """
-            INSERT INTO news (title, content, author_id, author_name)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO news (title, content, author_id, author_name, content_type)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (title, content, author_id, author_name),
+            (title, content, author_id, author_name, content_type),
         ) as cur:
             news_id = cur.lastrowid
         await self.conn.commit()
         return news_id  # type: ignore[return-value]
 
     async def get_news_list(self) -> list[aiosqlite.Row]:
-        """Возвращает все новости: закреплённые первыми, затем по дате."""
+        """Возвращает новости типа 'news': закреплённые первыми, затем по дате."""
         async with self.conn.execute(
-            "SELECT * FROM news ORDER BY pinned DESC, created_at DESC"
+            "SELECT * FROM news WHERE content_type = 'news' ORDER BY pinned DESC, created_at DESC"
+        ) as cur:
+            return await cur.fetchall()
+
+    async def get_news_list_by_type(self, content_type: str) -> list[aiosqlite.Row]:
+        """Возвращает записи по типу контента: закреплённые первыми, затем по дате."""
+        async with self.conn.execute(
+            "SELECT * FROM news WHERE content_type = ? ORDER BY pinned DESC, created_at DESC",
+            (content_type,),
         ) as cur:
             return await cur.fetchall()
 
@@ -426,6 +447,26 @@ class Database:
         ) as cur:
             row = await cur.fetchone()
             return int(row[0]) if row else 0
+
+    async def stats_user_activity(self, user_id: int) -> "aiosqlite.Row | None":
+        """Очки и счётчики публикаций одного участника из журнала аудита."""
+        sql = """
+        SELECT
+            SUM(CASE action_type
+                WHEN 'news_create'       THEN 5
+                WHEN 'guide_create'      THEN 10
+                WHEN 'screenshot_upload' THEN 2
+                WHEN 'event_create'      THEN 8
+                ELSE 0 END)                                                         AS score,
+            SUM(CASE WHEN action_type = 'news_create'       THEN 1 ELSE 0 END)     AS news_count,
+            SUM(CASE WHEN action_type = 'guide_create'      THEN 1 ELSE 0 END)     AS guides_count,
+            SUM(CASE WHEN action_type = 'screenshot_upload' THEN 1 ELSE 0 END)     AS screenshots_count,
+            SUM(CASE WHEN action_type = 'event_create'      THEN 1 ELSE 0 END)     AS events_count
+        FROM audit_log
+        WHERE user_id = ?
+        """
+        async with self.conn.execute(sql, (user_id,)) as cur:
+            return await cur.fetchone()
 
     async def stats_users_joined(self) -> tuple[int, int, int, int]:
         """(total, today, week, month) — сколько пользователей вступило."""

@@ -21,23 +21,6 @@ _WIP = "🚧 Раздел находится в разработке."
 # ------------------------------------------------------------------ #
 
 
-@router.message(F.text == BTN.EVENTS)
-async def handle_events(message: Message) -> None:
-    """Раздел событий клана."""
-    await message.answer(f"📅 <b>События</b>\n\n{_WIP}")
-
-
-@router.message(F.text == BTN.GUIDES)
-async def handle_guides(message: Message) -> None:
-    """Раздел гайдов."""
-    await message.answer(f"📚 <b>Гайды</b>\n\n{_WIP}")
-
-
-@router.message(F.text == BTN.SCREENSHOTS)
-async def handle_screenshots(message: Message) -> None:
-    """Раздел скриншотов."""
-    await message.answer(f"📸 <b>Скриншоты</b>\n\n{_WIP}")
-
 
 @router.message(F.text == BTN.MEMBERS)
 async def handle_members(message: Message, user_service: UserService) -> None:

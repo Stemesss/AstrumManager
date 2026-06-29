@@ -154,6 +154,19 @@ class StatsService:
             latest_date=latest["created_at"] if latest else None,
         )
 
+    async def user_activity(self, user_id: int) -> dict:
+        """Статистика публикаций и очки активности одного участника."""
+        row = await self._db.stats_user_activity(user_id)
+        if not row:
+            return {"score": 0, "news": 0, "guides": 0, "screenshots": 0, "events": 0}
+        return {
+            "score":       int(row["score"] or 0),
+            "news":        int(row["news_count"] or 0),
+            "guides":      int(row["guides_count"] or 0),
+            "screenshots": int(row["screenshots_count"] or 0),
+            "events":      int(row["events_count"] or 0),
+        }
+
     # ─────────────────────────────────────────────────────────────────────────
     # Рост клана
     # ─────────────────────────────────────────────────────────────────────────

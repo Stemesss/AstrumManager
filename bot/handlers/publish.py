@@ -57,7 +57,7 @@ _TYPES: dict[str, dict] = {
         "topic":   "events",
         "audit":   AuditAction.EVENT_CREATE,
         "verb":    "создал событие",
-        "uses_db": False,
+        "uses_db": True,
     },
     "guides": {
         "icon":    "📚",
@@ -65,7 +65,7 @@ _TYPES: dict[str, dict] = {
         "topic":   "guides",
         "audit":   AuditAction.GUIDE_CREATE,
         "verb":    "создал гайд",
-        "uses_db": False,
+        "uses_db": True,
     },
     "screenshots": {
         "icon":    "📸",
@@ -73,7 +73,7 @@ _TYPES: dict[str, dict] = {
         "topic":   "screenshots",
         "audit":   AuditAction.SCREENSHOT_UPLOAD,
         "verb":    "загрузил скриншот",
-        "uses_db": False,
+        "uses_db": True,
     },
 }
 
@@ -373,10 +373,10 @@ async def cb_confirm(
     await state.clear()
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # ── Сохранение в БД (только новости) ─────────────────────────────────
+    # ── Сохранение в БД ───────────────────────────────────────────────────
     pub_id: int | None = None
     if cfg["uses_db"]:
-        item   = await news_service.create(title, content, author_id, author_name)
+        item   = await news_service.create(title, content, author_id, author_name, content_type)
         pub_id = item.id
         pub_date = item.created_at
         logger.info("Пользователь %s создал %s #%d: %r", author_id, content_type, item.id, title)
