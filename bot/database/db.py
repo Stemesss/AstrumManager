@@ -44,6 +44,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
 )
 """
 
+_CREATE_TOPICS = """
+CREATE TABLE IF NOT EXISTS forum_topics (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_name        TEXT    UNIQUE NOT NULL,
+    message_thread_id INTEGER,
+    enabled           INTEGER NOT NULL DEFAULT 1
+)
+"""
+
 
 class Database:
     """Обёртка над aiosqlite для хранения данных пользователей."""
@@ -61,6 +70,7 @@ class Database:
         await self._conn.execute(_CREATE_USERS)
         await self._conn.execute(_CREATE_NEWS)
         await self._conn.execute(_CREATE_AUDIT)
+        await self._conn.execute(_CREATE_TOPICS)
         # Миграция: добавляем game_nick для существующих БД (игнорируем если уже есть)
         try:
             await self._conn.execute("ALTER TABLE users ADD COLUMN game_nick TEXT")
@@ -512,3 +522,34 @@ class Database:
     async def stats_best_of_week(self) -> aiosqlite.Row | None:
         """Победитель последних 7 дней."""
         return await self._stats_best_since("datetime('now', '-6 days')")
+
+    # ------------------------------------------------------------------ #
+    # Методы работы с ветками форума (forum_topics)
+    # ------------------------------------------------------------------ #
+
+    async def topic_set(self, topic_name: str, thread_id: int | None) -> None:
+        """Создаёт или обновляет message_thread_id для ветки."""
+        await self.conn.execute(
+            """
+            INSERT INTO forum_topics (topic_name, message_thread_id)
+            VALUES (?, ?)
+            ON CONFLICT(topic_name) DO UPDATE SET message_thread_id = excluded.message_thread_id
+            """,
+            (topic_name, thread_id),
+        )
+        await self.conn.commit()
+
+    async def topic_get(self, topic_name: str) -> "aiosqlite.Row | None":
+        """Возвращает строку ветки или None."""
+        async with self.conn.execute(
+            "SELECT * FROM forum_topics WHERE topic_name = ?",
+            (topic_name,),
+        ) as cur:
+            return await cur.fetchone()
+
+    async def topic_list(self) -> list:
+        """Список всех сохранённых веток."""
+        async with self.conn.execute(
+            "SELECT * FROM forum_topics ORDER BY id"
+        ) as cur:
+            return await cur.fetchall()

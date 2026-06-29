@@ -13,11 +13,12 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, audit, common, echo, group, menu, news, nick, setrole, stats, statistics
+from bot.handlers import admin, audit, common, echo, group, menu, news, nick, setrole, stats, statistics, topics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
 from bot.services.stats_service import StatsService
+from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 
 WEBHOOK_PATH = "/api/telegram/webhook"
@@ -94,10 +95,12 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     news_service  = NewsService(db)
     audit_service = AuditService(db)
     stats_service = StatsService(db)
+    topic_service = TopicService(db)
     dp["user_service"]  = user_service
     dp["news_service"]  = news_service
     dp["audit_service"] = audit_service
     dp["stats_service"] = stats_service
+    dp["topic_service"] = topic_service
     dp["db"]       = db
     dp["owner_id"] = owner_id
     # bot_username устанавливается в on_startup / on_startup_polling
@@ -119,6 +122,7 @@ def build_dispatcher(db: Database, owner_id: int | None = None) -> Dispatcher:
     private.include_router(nick.router)    # FSM ника — до menu/news
     private.include_router(audit.router)   # до menu — чтобы перехватить AuditSearch
     private.include_router(news.router)
+    private.include_router(topics.router)  # до admin — перекрывает admin:settings WIP-заглушку
     private.include_router(admin.router)
     private.include_router(stats.router)
     private.include_router(statistics.router)
