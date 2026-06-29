@@ -87,6 +87,33 @@ class UserService:
         row = await self._db.get_user(telegram_id)
         return row["game_nick"] if row else None
 
+    async def is_nick_taken(self, nick: str, exclude_id: int | None = None) -> bool:
+        """
+        True если игровой ник уже занят другим участником (без учёта регистра).
+
+        Как у Iris: в клане не может быть двух одинаковых ников.
+        exclude_id — пользователь, которого нужно пропустить (например, сам себя
+        при смене ника на тот же).
+        """
+        target = nick.casefold()
+        for u in await self.get_all_users():
+            if not u.game_nick:
+                continue
+            if u.game_nick.casefold() == target and u.telegram_id != exclude_id:
+                return True
+        return False
+
+    async def list_nicks(self) -> list[tuple[int, str, "UserRole"]]:
+        """Возвращает список (telegram_id, game_nick, role) участников с ником."""
+        users = await self.get_all_users()
+        items = [
+            (u.telegram_id, u.game_nick, u.role)
+            for u in users
+            if u.game_nick
+        ]
+        items.sort(key=lambda x: x[1].casefold())
+        return items
+
     async def get_profile_stats(self, telegram_id: int) -> dict:
         """Возвращает статистику профиля: дней в клане, гайдов, скриншотов."""
         days = await self._db.get_days_in_clan(telegram_id)

@@ -24,10 +24,15 @@
 
 Данный файл реализует те же команды через aiogram (Bot API):
   +Имя            — назначить ник (ответ на сообщение → цель, иначе себе)
-  !Имя            — то же самое
-  !ник Имя        — явный вариант
-  !назначить ник  — явный вариант (только в ответ на сообщение)
-  !удалить ник    — удалить ник (только для администраторов)
+  !ник Имя        — то же самое (явная форма)
+  !назначить ник  — назначить ник (только в ответ на сообщение)
+  !удалить ник    — удалить ник участника (только для администраторов)
+  -ник            — удалить собственный ник
+  Ники            — список ников клана
+
+Префикс «+» закреплён за никами (как у Iris). Префикс «!» используется
+только для явных команд, чтобы обычные «!текст» сообщения в чате не
+распознавались как попытка установить ник.
 ────────────────────────────────────────────────────────────────────────
 
 Требования:
@@ -54,8 +59,10 @@ logger = logging.getLogger(__name__)
 
 # ─── Паттерны команд ─────────────────────────────────────────────────────────
 
-# +Вадим  или  !Вадим  (без пробела после знака — краткая форма)
-_SHORT_NICK_RE = re.compile(r"^[+!](\S.+)$", re.UNICODE)
+# +Вадим  — краткая форма (префикс «+» закреплён за никами, как у Iris).
+# Префикс «!» намеренно НЕ входит сюда, иначе любой «!текст» в чате
+# распознавался бы как ник. Для «!» используются явные команды (!ник …).
+_SHORT_NICK_RE = re.compile(r"^\+(\S.+)$", re.UNICODE)
 
 # !ник Вадим  (с пробелом)
 _NICK_CMD_RE = re.compile(r"^[!/]ник\s+(.+)$", re.IGNORECASE | re.UNICODE)
@@ -63,19 +70,7 @@ _NICK_CMD_RE = re.compile(r"^[!/]ник\s+(.+)$", re.IGNORECASE | re.UNICODE)
 # !назначить ник Вадим  (только в ответ на сообщение)
 _ASSIGN_CMD_RE = re.compile(r"^[!/]назначить\s+ник\s+(.+)$", re.IGNORECASE | re.UNICODE)
 
-# !удалить ник  (только в ответ на сообщение)
-_DELETE_CMD_RE = re.compile(r"^[!/]удалить\s+ник$", re.IGNORECASE | re.UNICODE)
-
 _ADMIN_BADGE = "🔰"   # значок в ответе при назначении ником другому
-
-
-def _extract_name(text: str) -> str | None:
-    """Извлекает имя из текста команды по любому из паттернов."""
-    for pattern in (_NICK_CMD_RE, _ASSIGN_CMD_RE, _SHORT_NICK_RE):
-        m = pattern.match(text)
-        if m:
-            return m.group(1).strip()
-    return None
 
 
 async def _is_group_admin(user_id: int, user_service: UserService) -> bool:
@@ -216,46 +211,49 @@ async def _handle_nick_assign(
         await message.reply(error)
         return
 
-    # Если команда в ответ на сообщение — цель — автор ответа
+    # Определяем цель: ответ на сообщение → автор ответа, иначе → сам
     if message.reply_to_message and message.reply_to_message.from_user:
-        target = message.reply_to_message.from_user
-
+        target_user = message.reply_to_message.from_user
         # Назначать чужой ник — только администраторам
-        if target.id != actor_id:
-            if not await _is_group_admin(actor_id, user_service):
-                await message.reply(
-                    "⛔ Назначать ник другим участникам могут только администраторы."
-                )
-                return
-
-        await _set_nick(
-            bot, message,
-            target_id=target.id,
-            target_name_tg=target.full_name,
-            new_name=name,
-            actor_id=actor_id,
-            user_service=user_service,
-            audit_service=audit_service,
-            group_chat_id=group_chat_id,
-            is_self=(target.id == actor_id),
-        )
-
+        if target_user.id != actor_id and not await _is_group_admin(actor_id, user_service):
+            await message.reply(
+                "⛔ Назначать ник другим участникам могут только администраторы."
+            )
+            return
+        is_self = (target_user.id == actor_id)
     else:
-        # Без ответа — меняем собственный ник
-        await _set_nick(
-            bot, message,
-            target_id=actor_id,
-            target_name_tg=message.from_user.full_name,
-            new_name=name,
-            actor_id=actor_id,
-            user_service=user_service,
-            audit_service=audit_service,
-            group_chat_id=group_chat_id,
-            is_self=True,
+        target_user = message.from_user
+        is_self = True
+
+    if target_user.is_bot:
+        await message.reply("⚠️ Нельзя назначить игровой ник боту.")
+        return
+
+    # Гарантируем, что цель есть в БД — иначе set_game_nick (UPDATE) не сохранит ник
+    await user_service.get_or_create(target_user)
+
+    # Уникальность ника в клане (как у Iris: нет повторяющихся ников)
+    if await user_service.is_nick_taken(name, exclude_id=target_user.id):
+        await message.reply(
+            f"❌ Ник «{name}» уже занят другим участником клана.\n"
+            "Выберите другой ник."
         )
+        return
+
+    await _set_nick(
+        bot, message,
+        target_id=target_user.id,
+        target_name_tg=target_user.full_name,
+        new_name=name,
+        actor_id=actor_id,
+        user_service=user_service,
+        audit_service=audit_service,
+        group_chat_id=group_chat_id,
+        is_self=is_self,
+    )
 
 
-@router.message(F.text.regexp(r"^[+!]\S.+"))
+@router.message(F.text.regexp(r"^\+\S.+"))
 async def handle_short_nick(
     message: Message,
     user_service: UserService,
@@ -263,16 +261,8 @@ async def handle_short_nick(
     bot: Bot,
     group_chat_id: int,
 ) -> None:
-    """Обработчик краткой формы: «+Вадим» или «!Вадим»."""
+    """Обработчик краткой формы: «+Вадим» (префикс «+» закреплён за никами)."""
     if not message.text:
-        return
-
-    # Не обрабатываем стандартные команды вида !удалить, !ник и т.п.
-    if _NICK_CMD_RE.match(message.text):
-        return
-    if _ASSIGN_CMD_RE.match(message.text):
-        return
-    if _DELETE_CMD_RE.match(message.text):
         return
 
     m = _SHORT_NICK_RE.match(message.text)
@@ -366,6 +356,52 @@ async def handle_delete_nick_cmd(
     )
 
 
+@router.message(F.text.regexp(r"^-ник$") | F.text.regexp(r"(?i)^[!/]удалить\s+свой\s+ник$"))
+async def handle_remove_own_nick(
+    message: Message,
+    user_service: UserService,
+    audit_service: AuditService,
+    bot: Bot,
+    group_chat_id: int,
+) -> None:
+    """Обработчик: «-ник» — удалить собственный ник (краткая форма, как у Iris)."""
+    if not message.from_user:
+        return
+    await _delete_nick(
+        bot, message,
+        target_id=message.from_user.id,
+        target_name_tg=message.from_user.full_name,
+        actor_id=message.from_user.id,
+        user_service=user_service,
+        audit_service=audit_service,
+        group_chat_id=group_chat_id,
+    )
+
+
+@router.message(F.text.regexp(r"(?i)^(ники|[!/]ники)$"))
+async def handle_list_nicks(
+    message: Message,
+    user_service: UserService,
+) -> None:
+    """Обработчик: «Ники» — список ников участников клана (как у Iris)."""
+    items = await user_service.list_nicks()
+    if not items:
+        await message.reply("📭 В клане пока нет установленных ников.")
+        return
+
+    lines = []
+    for tg_id, nick, role in items[:50]:
+        full = build_full_nick(nick, role)
+        lines.append(
+            f'• <a href="tg://user?id={tg_id}">{full}</a>'
+        )
+
+    total = len(items)
+    header = f"🏷 <b>Ники клана</b> ({total})\n\n"
+    footer = "" if total <= 50 else f"\n\n<i>Показаны первые 50 из {total}.</i>"
+    await message.reply(header + "\n".join(lines) + footer)
+
+
 @router.message(F.text.regexp(r"(?i)^[!/](?:ник|назначить\s+ник|удалить\s+ник)$"))
 async def handle_nick_help(message: Message) -> None:
     """Показывает подсказку при неправильном использовании команд."""
@@ -373,9 +409,15 @@ async def handle_nick_help(message: Message) -> None:
         "📋 <b>Команды никнеймов в группе</b>\n\n"
         "<b>Установить свой ник:</b>\n"
         "<code>+Вадим</code>  или  <code>!ник Вадим</code>\n\n"
+        "<b>Удалить свой ник:</b>\n"
+        "<code>-ник</code>\n\n"
+        "<b>Список ников клана:</b>\n"
+        "<code>Ники</code>\n\n"
         "<b>Назначить ник участнику</b> (ответ на сообщение, только администратор):\n"
         "<code>+Вадим</code>  или  <code>!назначить ник Вадим</code>\n\n"
         "<b>Удалить ник участника</b> (ответ на сообщение, только администратор):\n"
         "<code>!удалить ник</code>\n\n"
-        "<i>Правила имени: от 3 до 20 символов, без эмодзи и спецсимволов.</i>"
+        "<i>Правила имени: от 3 до 20 символов, без эмодзи и спецсимволов.\n"
+        "Повторяющиеся ники в клане запрещены.\n"
+        "Префикс «+» — для ников; «!» — для команд.</i>"
     )
