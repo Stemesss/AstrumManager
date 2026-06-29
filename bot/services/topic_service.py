@@ -1,24 +1,44 @@
 # -*- coding: utf-8 -*-
 """
-TopicService — управление Telegram Topics (ветками форума).
+TopicService — единая точка управления системными форумными темами.
 
-Использование в обработчиках:
-    await topic_service.publish(bot, "news", text)
-    # thread_id=None → обычный чат (не ветка), без ошибки
+Публичный API:
+    # Получение данных (без обращения к Telegram API)
+    await topic_service.get_topic(key)        → ForumTopic | None
+    await topic_service.get_thread_id(key)    → int | None
+    await topic_service.list_topics()         → list[ForumTopic]
+
+    # Создание / синхронизация (обращается к Telegram API)
+    await topic_service.create_system_topic(bot, key)  → int | None
+    await topic_service.sync_all_topics(bot)           → SyncReport (dict)
+
+    # Быстрая проверка при запуске (без API)
+    await topic_service.check_topics_startup()  → list[str]  # ключи отсутствующих тем
+
+    # Публикация контента
+    await topic_service.publish(bot, key, text)
+    await topic_service.publish_with_attachments(bot, key, text, attachments)
 """
 import logging
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import InputMediaPhoto, InputMediaVideo
 
 from bot.database.db import Database
-from bot.models.topic import ALL_TOPIC_NAMES, DEFAULT_THREAD_IDS, TOPIC_LABELS, ForumTopic
+from bot.models.topic import (
+    ALL_TOPIC_NAMES,
+    DEFAULT_THREAD_IDS,
+    TOPIC_LABELS,
+    TOPIC_REGISTRY,
+    ForumTopic,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class TopicService:
-    """CRUD для таблицы forum_topics + публикация в нужную ветку."""
+    """Единый менеджер системных форумных тем."""
 
     def __init__(self, db: Database, chat_id: int) -> None:
         self._db = db
@@ -28,24 +48,32 @@ class TopicService:
     def chat_id(self) -> int:
         return self._chat_id
 
-    # ── Конвертер ─────────────────────────────────────────────────────────────
+    # ── Внутренние вспомогательные методы ─────────────────────────────────────
 
     def _to_model(self, row) -> ForumTopic:
+        """Конвертирует строку БД в объект ForumTopic."""
+        row_dict = dict(row)
         return ForumTopic(
-            topic_name=row["topic_name"],
-            message_thread_id=row["message_thread_id"],
-            enabled=bool(row["enabled"]),
+            topic_name=row_dict["topic_name"],
+            message_thread_id=row_dict["message_thread_id"],
+            enabled=bool(row_dict["enabled"]),
+            icon_custom_emoji_id=row_dict.get("icon_custom_emoji_id"),
         )
 
     # ── CRUD ──────────────────────────────────────────────────────────────────
 
-    async def set_topic(self, topic_name: str, thread_id: int | None) -> None:
-        """Сохраняет (или обновляет) message_thread_id для ветки."""
-        await self._db.topic_set(topic_name, thread_id)
-        logger.info("Ветка '%s' → thread_id=%s", topic_name, thread_id)
+    async def set_topic(
+        self,
+        topic_name: str,
+        thread_id: int | None,
+        icon_custom_emoji_id: str | None = None,
+    ) -> None:
+        """Сохраняет (или обновляет) параметры ветки в БД."""
+        await self._db.topic_set(topic_name, thread_id, icon_custom_emoji_id)
+        logger.info("Ветка '%s' → thread_id=%s emoji=%s", topic_name, thread_id, icon_custom_emoji_id)
 
     async def get_topic(self, topic_name: str) -> ForumTopic | None:
-        """Возвращает ForumTopic или None если ветка не настроена."""
+        """Возвращает ForumTopic из БД или None."""
         row = await self._db.topic_get(topic_name)
         return self._to_model(row) if row else None
 
@@ -60,7 +88,7 @@ class TopicService:
         return topic.message_thread_id
 
     async def list_topics(self) -> list[ForumTopic]:
-        """Список всех тем (из БД + заглушки для ненастроенных)."""
+        """Список всех тем в порядке реестра (из БД + заглушки для ненастроенных)."""
         rows = await self._db.topic_list()
         configured = {r["topic_name"]: self._to_model(r) for r in rows}
         return [
@@ -72,14 +100,141 @@ class TopicService:
 
     async def seed_default_topics(self) -> None:
         """
-        Заполняет forum_topics значениями по умолчанию.
-        Пропускает темы, уже настроенные администратором через панель.
+        Заполняет forum_topics предустановленными значениями при первом запуске.
+        Пропускает темы, уже настроенные администратором.
         """
         for name, thread_id in DEFAULT_THREAD_IDS.items():
             existing = await self._db.topic_get(name)
             if existing is None:
                 await self._db.topic_set(name, thread_id)
                 logger.info("Посев: ветка '%s' → thread_id=%d", name, thread_id)
+
+    # ── Управление темами через Telegram API ───────────────────────────────────
+
+    async def create_system_topic(self, bot: Bot, topic_key: str) -> int | None:
+        """
+        Создаёт форумную тему в Telegram и сохраняет thread_id в БД.
+
+        Требует, чтобы бот имел права can_manage_topics в группе.
+        Возвращает thread_id созданной темы или None при ошибке.
+
+        Ограничение Telegram: icon_color нельзя изменить после создания.
+        """
+        defn = TOPIC_REGISTRY.get(topic_key)
+        if not defn:
+            logger.error("create_system_topic: неизвестный ключ '%s'", topic_key)
+            return None
+        try:
+            tg_topic = await bot.create_forum_topic(
+                chat_id=self._chat_id,
+                name=defn.name,
+                icon_color=defn.icon_color,
+            )
+            thread_id = tg_topic.message_thread_id
+            await self.set_topic(topic_key, thread_id)
+            logger.info("Создана тема '%s' → thread_id=%d", topic_key, thread_id)
+            return thread_id
+        except TelegramForbiddenError as exc:
+            logger.warning("create_system_topic '%s': нет прав → %s", topic_key, exc)
+            return None
+        except TelegramBadRequest as exc:
+            logger.error("create_system_topic '%s': ошибка API → %s", topic_key, exc)
+            return None
+        except Exception as exc:
+            logger.error("create_system_topic '%s': неожиданная ошибка → %s", topic_key, exc)
+            return None
+
+    async def sync_all_topics(self, bot: Bot) -> dict:
+        """
+        Синхронизирует все системные темы с Telegram.
+
+        Алгоритм для каждой темы из реестра:
+        - Если thread_id настроен → вызывает editForumTopic для проверки/исправления имени.
+          Ограничение Telegram: editForumTopic меняет name и icon_custom_emoji_id,
+          но НЕ icon_color (цвет задаётся только при создании).
+        - Если thread_id не настроен → вызывает create_system_topic.
+
+        Возвращает словарь-отчёт:
+        {
+          "created":      [keys],   # созданы новые темы
+          "name_fixed":   [keys],   # исправлены названия
+          "ok":           [keys],   # всё в порядке
+          "missing":      [keys],   # тема удалена из Telegram (thread не найден)
+          "no_permission":[keys],   # нет прав (can_manage_topics)
+          "errors":       {key: msg},
+        }
+
+        Синхронизация безопасна: не удаляет и не пересоздаёт темы.
+        """
+        report: dict = {
+            "created":       [],
+            "name_fixed":    [],
+            "ok":            [],
+            "missing":       [],
+            "no_permission": [],
+            "errors":        {},
+        }
+
+        for topic_key, defn in TOPIC_REGISTRY.items():
+            topic     = await self.get_topic(topic_key)
+            thread_id = topic.message_thread_id if (topic and topic.enabled) else None
+
+            if thread_id is None:
+                # Тема не настроена — создаём
+                new_id = await self.create_system_topic(bot, topic_key)
+                if new_id is not None:
+                    report["created"].append(topic_key)
+                else:
+                    report["no_permission"].append(topic_key)
+            else:
+                # Тема настроена — проверяем/исправляем через editForumTopic
+                try:
+                    await bot.edit_forum_topic(
+                        chat_id=self._chat_id,
+                        message_thread_id=thread_id,
+                        name=defn.name,
+                    )
+                    # Успешный edit означает, что имя было другим и теперь исправлено
+                    report["name_fixed"].append(topic_key)
+                    logger.info("Исправлено имя темы '%s' #%d", topic_key, thread_id)
+                except TelegramBadRequest as exc:
+                    msg = str(exc)
+                    if "TOPIC_NOT_MODIFIED" in msg:
+                        # Имя и так совпадает — всё в порядке
+                        report["ok"].append(topic_key)
+                    elif "MESSAGE_THREAD_NOT_FOUND" in msg or "THREAD_NOT_FOUND" in msg:
+                        # Тема удалена из Telegram; сбрасываем thread_id в БД
+                        await self.set_topic(topic_key, None)
+                        report["missing"].append(topic_key)
+                        logger.warning(
+                            "Тема '%s' #%d не найдена в Telegram — thread_id сброшен",
+                            topic_key, thread_id,
+                        )
+                    else:
+                        report["errors"][topic_key] = msg
+                        logger.error("Ошибка синхронизации темы '%s': %s", topic_key, exc)
+                except TelegramForbiddenError as exc:
+                    report["no_permission"].append(topic_key)
+                    logger.warning("Нет прав для темы '%s': %s", topic_key, exc)
+                except Exception as exc:
+                    report["errors"][topic_key] = str(exc)
+                    logger.error("Ошибка синхронизации темы '%s': %s", topic_key, exc)
+
+        return report
+
+    async def check_topics_startup(self) -> list[str]:
+        """
+        Быстрая проверка при запуске (без обращения к Telegram API).
+        Возвращает список ключей обязательных тем, у которых не настроен thread_id.
+        """
+        missing = []
+        for topic_key, defn in TOPIC_REGISTRY.items():
+            if not defn.required:
+                continue
+            topic = await self.get_topic(topic_key)
+            if not topic or topic.message_thread_id is None:
+                missing.append(topic_key)
+        return missing
 
     # ── Публикация ────────────────────────────────────────────────────────────
 
@@ -90,10 +245,7 @@ class TopicService:
         text: str,
         **kwargs,
     ) -> bool:
-        """
-        Публикует текстовое сообщение в нужную ветку (или основной чат).
-        Возвращает True при успехе, False при ошибке доступа.
-        """
+        """Публикует текстовое сообщение в нужную ветку (или основной чат)."""
         thread_id = await self.get_thread_id(topic_name)
         label = TOPIC_LABELS.get(topic_name, topic_name)
         try:
@@ -198,7 +350,7 @@ class TopicService:
                 pm = "HTML" if caption else None
                 all_media.append(InputMediaPhoto(media=p["file_id"], caption=caption, parse_mode=pm))
             for i, v in enumerate(videos):
-                idx    = len(photos) + i
+                idx     = len(photos) + i
                 caption = text if idx == 0 else None
                 pm = "HTML" if caption else None
                 all_media.append(InputMediaVideo(media=v["file_id"], caption=caption, parse_mode=pm))
@@ -227,7 +379,6 @@ class TopicService:
                         media=all_media,
                         message_thread_id=thread_id,
                     )
-                # Документы отправляем без caption (текст уже в медиа)
                 for d in docs:
                     await bot.send_document(
                         chat_id=self._chat_id,

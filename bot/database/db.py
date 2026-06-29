@@ -46,10 +46,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 _CREATE_TOPICS = """
 CREATE TABLE IF NOT EXISTS forum_topics (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    topic_name        TEXT    UNIQUE NOT NULL,
-    message_thread_id INTEGER,
-    enabled           INTEGER NOT NULL DEFAULT 1
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_name            TEXT    UNIQUE NOT NULL,
+    message_thread_id     INTEGER,
+    enabled               INTEGER NOT NULL DEFAULT 1,
+    icon_custom_emoji_id  TEXT
 )
 """
 
@@ -113,6 +114,14 @@ class Database:
                 "ALTER TABLE news ADD COLUMN content_type TEXT NOT NULL DEFAULT 'news'"
             )
             logger.info("Миграция: столбец content_type добавлен в таблицу news")
+        except Exception:
+            pass  # Столбец уже существует
+        # Миграция: icon_custom_emoji_id для форумных тем
+        try:
+            await self._conn.execute(
+                "ALTER TABLE forum_topics ADD COLUMN icon_custom_emoji_id TEXT"
+            )
+            logger.info("Миграция: столбец icon_custom_emoji_id добавлен в таблицу forum_topics")
         except Exception:
             pass  # Столбец уже существует
         await self._conn.commit()
@@ -598,15 +607,22 @@ class Database:
     # Методы работы с ветками форума (forum_topics)
     # ------------------------------------------------------------------ #
 
-    async def topic_set(self, topic_name: str, thread_id: int | None) -> None:
-        """Создаёт или обновляет message_thread_id для ветки."""
+    async def topic_set(
+        self,
+        topic_name: str,
+        thread_id: int | None,
+        icon_custom_emoji_id: str | None = None,
+    ) -> None:
+        """Создаёт или обновляет запись ветки форума."""
         await self.conn.execute(
             """
-            INSERT INTO forum_topics (topic_name, message_thread_id)
-            VALUES (?, ?)
-            ON CONFLICT(topic_name) DO UPDATE SET message_thread_id = excluded.message_thread_id
+            INSERT INTO forum_topics (topic_name, message_thread_id, icon_custom_emoji_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT(topic_name) DO UPDATE SET
+                message_thread_id    = excluded.message_thread_id,
+                icon_custom_emoji_id = COALESCE(excluded.icon_custom_emoji_id, forum_topics.icon_custom_emoji_id)
             """,
-            (topic_name, thread_id),
+            (topic_name, thread_id, icon_custom_emoji_id),
         )
         await self.conn.commit()
 

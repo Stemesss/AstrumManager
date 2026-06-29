@@ -6,7 +6,7 @@
 """
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -32,6 +32,47 @@ async def _check_admin(cb: CallbackQuery, user_service: UserService) -> bool:
     return True
 
 
+def _format_sync_report(report: dict) -> str:
+    """Форматирует отчёт синхронизации в текст для пользователя."""
+    lines = ["🔄 <b>Результаты синхронизации</b>\n"]
+
+    if report["created"]:
+        lines.append(f"🆕 Созданы ({len(report['created'])}):")
+        for k in report["created"]:
+            lines.append(f"  • {TOPIC_LABELS.get(k, k)}")
+
+    if report["name_fixed"]:
+        lines.append(f"✏️ Исправлено название ({len(report['name_fixed'])}):")
+        for k in report["name_fixed"]:
+            lines.append(f"  • {TOPIC_LABELS.get(k, k)}")
+
+    if report["ok"]:
+        lines.append(f"✅ В порядке: {len(report['ok'])} тем")
+
+    if report["missing"]:
+        lines.append(f"⚠️ Тема удалена в Telegram ({len(report['missing'])}):")
+        for k in report["missing"]:
+            lines.append(f"  • {TOPIC_LABELS.get(k, k)} — thread_id сброшен, настройте заново")
+
+    if report["no_permission"]:
+        lines.append(f"🔒 Нет прав can_manage_topics ({len(report['no_permission'])}):")
+        for k in report["no_permission"]:
+            lines.append(f"  • {TOPIC_LABELS.get(k, k)}")
+        lines.append("  <i>Назначьте боту роль администратора с правом управления темами.</i>")
+
+    if report["errors"]:
+        lines.append(f"❌ Ошибки ({len(report['errors'])}):")
+        for k, err in report["errors"].items():
+            lines.append(f"  • {TOPIC_LABELS.get(k, k)}: {err[:80]}")
+
+    total = (
+        len(report["created"]) + len(report["name_fixed"]) + len(report["ok"])
+        + len(report["missing"]) + len(report["no_permission"]) + len(report["errors"])
+    )
+    lines.append(f"\n<i>Всего проверено: {total} тем</i>")
+    return "\n".join(lines)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ⚙️ Настройки → открывает меню веток
 # ─────────────────────────────────────────────────────────────────────────────
@@ -47,8 +88,48 @@ async def cb_settings(
     await callback.answer()
     topics = await topic_service.list_topics()
     await callback.message.answer(
+        f"{_MENU_TITLE}\n\nВыберите ветку для настройки или нажмите «🔄 Синхронизировать»:",
+        reply_markup=topics_menu_kb(topics),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🔄 Синхронизировать темы
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == TopicBtn.SYNC)
+async def cb_topics_sync(
+    callback: CallbackQuery,
+    user_service: UserService,
+    topic_service: TopicService,
+    bot: Bot,
+) -> None:
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+
+    progress = await callback.message.answer(
+        "🔄 <b>Синхронизация тем...</b>\n\n<i>Это может занять несколько секунд.</i>"
+    )
+
+    report = await topic_service.sync_all_topics(bot)
+    result_text = _format_sync_report(report)
+
+    try:
+        await progress.edit_text(result_text)
+    except Exception:
+        await callback.message.answer(result_text)
+
+    # Обновляем меню с актуальными thread_id
+    topics = await topic_service.list_topics()
+    await callback.message.answer(
         f"{_MENU_TITLE}\n\nВыберите ветку для настройки:",
         reply_markup=topics_menu_kb(topics),
+    )
+    logger.info(
+        "Синхронизация тем: created=%s fixed=%s ok=%s missing=%s no_perm=%s errors=%s",
+        report["created"], report["name_fixed"], report["ok"],
+        report["missing"], report["no_permission"], list(report["errors"].keys()),
     )
 
 

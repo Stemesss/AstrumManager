@@ -49,6 +49,23 @@ def resolve_public_host() -> str | None:
     return None
 
 
+async def _check_topics_on_startup(dp: Dispatcher) -> None:
+    """Быстрая проверка тем при старте (без API). Логирует предупреждения."""
+    logger = logging.getLogger(__name__)
+    topic_service = dp["topic_service"]
+    missing = await topic_service.check_topics_startup()
+    if missing:
+        from bot.models.topic import TOPIC_LABELS
+        names = ", ".join(TOPIC_LABELS.get(k, k) for k in missing)
+        logger.warning(
+            "Не настроены %d обязательных тем: %s — "
+            "используйте ⚙️ Настройки → 🧵 Настройка веток → 🔄 Синхронизировать",
+            len(missing), names,
+        )
+    else:
+        logger.info("Проверка тем: все обязательные темы настроены")
+
+
 async def on_startup(
     bot: Bot, db: Database, dp: Dispatcher, webhook_url: str, **_kwargs
 ) -> None:
@@ -57,6 +74,7 @@ async def on_startup(
     dp["bot_start_time"] = datetime.datetime.now(datetime.timezone.utc)
     await db.connect()
     await dp["topic_service"].seed_default_topics()
+    await _check_topics_on_startup(dp)
     me = await bot.get_me()
     dp["bot_username"] = me.username or ""
     allowed = dp.resolve_used_update_types()
@@ -78,6 +96,7 @@ async def on_startup_polling(
     dp["bot_start_time"] = datetime.datetime.now(datetime.timezone.utc)
     await db.connect()
     await dp["topic_service"].seed_default_topics()
+    await _check_topics_on_startup(dp)
     me = await bot.get_me()
     dp["bot_username"] = me.username or ""
     logging.getLogger(__name__).info(

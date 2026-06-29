@@ -10,6 +10,7 @@ class TopicBtn:
     PREFIX = "topic:"
     BACK   = "topics:back"
     CANCEL = "topics:cancel"
+    SYNC   = "topics:sync"
 
     @staticmethod
     def select(name: str) -> str:
@@ -21,8 +22,8 @@ def topics_menu_kb(topics: list[ForumTopic]) -> InlineKeyboardMarkup:
     configured = {t.topic_name: t for t in topics}
     rows = []
     for name in ALL_TOPIC_NAMES:
-        topic = configured.get(name)
-        label = TOPIC_LABELS[name]
+        topic  = configured.get(name)
+        label  = TOPIC_LABELS[name]
         status = f" [{topic.status}]" if topic else " [не настроено]"
         rows.append([
             InlineKeyboardButton(
@@ -31,7 +32,10 @@ def topics_menu_kb(topics: list[ForumTopic]) -> InlineKeyboardMarkup:
             )
         ])
     rows.append([
-        InlineKeyboardButton(text="⬅️ Назад", callback_data=TopicBtn.BACK)
+        InlineKeyboardButton(text="🔄 Синхронизировать", callback_data=TopicBtn.SYNC),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data=TopicBtn.BACK),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
