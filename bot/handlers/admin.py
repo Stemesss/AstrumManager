@@ -6,49 +6,111 @@
   👑 Лидер, ⭐ Дитя клана, 🛡️ Старейшина → полная панель управления
   👤 Участник → отказ
 """
+import datetime
 import logging
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.admin_panel import ADMIN_PANEL_KB, AdminBtn
+from bot.keyboards.audit import audit_menu_kb
 from bot.keyboards.main_menu import BTN
 from bot.models.user import UserRole
+from bot.services.news_service import NewsService
 from bot.services.user_service import UserService
-from bot.utils.roles import role_label
+from bot.utils.roles import ROLE_ORDER, role_label
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-_WIP = "🚧 Раздел находится в разработке."
+_WIP     = "🚧 Раздел находится в разработке."
+_VERSION = "v1.0.0"
+
+_ROLE_ICONS = {
+    UserRole.LEADER:     "👑",
+    UserRole.CLAN_CHILD: "⭐",
+    UserRole.ELDER:      "🛡️",
+    UserRole.MEMBER:     "👤",
+}
 
 
-# ───────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Вспомогательные функции
-# ───────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 
-def _role_stats(users: list) -> str:
-    """Формирует строку статистики по ролям в порядке иерархии."""
-    from bot.utils.roles import ROLE_ORDER
-    by_role: dict[UserRole, int] = {}
+def _format_uptime(start: datetime.datetime) -> str:
+    """Форматирует время работы бота в читаемый вид."""
+    now   = datetime.datetime.now(datetime.timezone.utc)
+    delta = now - start
+    total = int(delta.total_seconds())
+    days  = total // 86400
+    hours = (total % 86400) // 3600
+    mins  = (total % 3600) // 60
+    if days:
+        return f"{days} д. {hours} ч."
+    if hours:
+        return f"{hours} ч. {mins} мин."
+    return f"{mins} мин."
+
+
+def _role_stats(users: list) -> dict[UserRole, int]:
+    counts: dict[UserRole, int] = {r: 0 for r in UserRole}
     for u in users:
-        by_role[u.role] = by_role.get(u.role, 0) + 1
-
-    lines = []
-    for role in ROLE_ORDER:
-        count = by_role.get(role, 0)
-        if count:
-            lines.append(f"  {role_label(role)}: {count}")
-    return "\n".join(lines)
+        counts[u.role] = counts.get(u.role, 0) + 1
+    return counts
 
 
-# ───────────────────────────────────────────────────────────────────────────
+async def _build_panel(
+    users: list,
+    news_count: int,
+    start_time: datetime.datetime | None,
+    role: UserRole,
+) -> str:
+    counts = _role_stats(users)
+    total  = len(users)
+
+    uptime = _format_uptime(start_time) if start_time else "—"
+
+    # Блок состава: только роли из иерархии
+    members_block = ""
+    for r in ROLE_ORDER:
+        icon = _ROLE_ICONS[r]
+        label = role_label(r)
+        cnt = counts.get(r, 0)
+        members_block += f"{icon} {label}: {cnt}\n"
+
+    return (
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🛡️ <b>AstrumManager</b>\n"
+        "<b>Панель управления</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🟢 Статус бота: Онлайн\n"
+        f"⏳ Работает: {uptime}\n"
+        f"🤖 Версия: {_VERSION}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👥 Участников: {total}\n"
+        f"{members_block}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📰 Новостей: {news_count}\n"
+        f"📅 Событий: 0\n"
+        f"📚 Гайдов: 0\n"
+        f"📸 Скриншотов: 0\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Выберите раздел:"
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Главный обработчик кнопки «🛡️ Администрация»
-# ───────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 
 @router.message(F.text == BTN.ADMIN)
-async def handle_admin(message: Message, user_service: UserService) -> None:
-    """Открывает панель администрации (одинаковая для всех административных ролей)."""
+async def handle_admin(
+    message: Message,
+    user_service: UserService,
+    news_service: NewsService,
+    bot_start_time: datetime.datetime | None = None,
+) -> None:
     if not message.from_user:
         return
 
@@ -66,74 +128,105 @@ async def handle_admin(message: Message, user_service: UserService) -> None:
         )
         return
 
-    users = await user_service.get_all_users()
-    total = len(users)
-    stats = _role_stats(users)
+    users, news_list = (
+        await user_service.get_all_users(),
+        await news_service.get_list(),
+    )
 
     logger.info(
         "Администратор %s (роль: %s) открыл панель управления",
         message.from_user.id, role.value,
     )
-    await message.answer(
-        "🛡️ <b>Панель администрации Astrum</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"Ваш уровень доступа: {role_label(role)}\n\n"
-        f"<b>📊 Состав клана:</b>\n"
-        f"{stats}\n"
-        f"  <b>Итого:</b> {total}\n\n"
-        "Выберите раздел для управления:",
-        reply_markup=ADMIN_PANEL_KB,
-    )
+    text = await _build_panel(users, len(news_list), bot_start_time, role)
+    await message.answer(text, reply_markup=ADMIN_PANEL_KB)
 
 
-# ───────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Обработчики инлайн-кнопок панели администрации
-# ───────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 
-async def _admin_callback(
+async def _check_admin(callback: CallbackQuery, user_service: UserService) -> UserRole | None:
+    """Проверяет права и возвращает роль или None (если доступ запрещён)."""
+    if not callback.from_user:
+        await callback.answer()
+        return None
+    role = await user_service.get_role(callback.from_user.id)
+    if role not in UserRole.admin_roles():
+        await callback.answer("🔒 Недостаточно прав.", show_alert=True)
+        return None
+    return role
+
+
+async def _wip_callback(
     callback: CallbackQuery,
     user_service: UserService,
     section_name: str,
 ) -> None:
-    """Общий обработчик: проверяет права администратора и отвечает на нажатие кнопки."""
-    if not callback.from_user:
-        await callback.answer()
+    role = await _check_admin(callback, user_service)
+    if role is None:
         return
-
-    role = await user_service.get_role(callback.from_user.id)
-    if role not in UserRole.admin_roles():
-        await callback.answer("🔒 Недостаточно прав.", show_alert=True)
-        return
-
     await callback.answer()
     await callback.message.answer(f"<b>{section_name}</b>\n\n{_WIP}")
 
 
-@router.callback_query(F.data == AdminBtn.MEMBERS)
-async def cb_members(callback: CallbackQuery, user_service: UserService) -> None:
-    await _admin_callback(callback, user_service, "👥 Управление участниками")
-
-
 @router.callback_query(F.data == AdminBtn.NEWS)
 async def cb_news(callback: CallbackQuery, user_service: UserService) -> None:
-    await _admin_callback(callback, user_service, "📢 Управление новостями")
+    await _wip_callback(callback, user_service, "📰 Управление новостями")
 
 
 @router.callback_query(F.data == AdminBtn.EVENTS)
 async def cb_events(callback: CallbackQuery, user_service: UserService) -> None:
-    await _admin_callback(callback, user_service, "📅 Управление событиями")
+    await _wip_callback(callback, user_service, "📅 Управление событиями")
 
 
 @router.callback_query(F.data == AdminBtn.GUIDES)
 async def cb_guides(callback: CallbackQuery, user_service: UserService) -> None:
-    await _admin_callback(callback, user_service, "📚 Управление гайдами")
+    await _wip_callback(callback, user_service, "📚 Управление гайдами")
 
 
 @router.callback_query(F.data == AdminBtn.SCREENSHOTS)
 async def cb_screenshots(callback: CallbackQuery, user_service: UserService) -> None:
-    await _admin_callback(callback, user_service, "📸 Управление скриншотами")
+    await _wip_callback(callback, user_service, "📸 Управление скриншотами")
 
 
-@router.callback_query(F.data == AdminBtn.COMMUNITY)
-async def cb_community(callback: CallbackQuery, user_service: UserService) -> None:
-    await _admin_callback(callback, user_service, "⚙️ Настройки сообщества")
+@router.callback_query(F.data == AdminBtn.MEMBERS)
+async def cb_members(callback: CallbackQuery, user_service: UserService) -> None:
+    await _wip_callback(callback, user_service, "👥 Управление участниками")
+
+
+@router.callback_query(F.data == AdminBtn.ROLES)
+async def cb_roles(callback: CallbackQuery, user_service: UserService) -> None:
+    role = await _check_admin(callback, user_service)
+    if role is None:
+        return
+    await callback.answer()
+    await callback.message.answer(
+        "🎖️ <b>Управление ролями</b>\n\n"
+        "Чтобы изменить роль участника, используйте команду:\n\n"
+        "<code>/setrole @username роль</code>\n\n"
+        "Доступные роли:\n"
+        "👑 Лидер\n"
+        "⭐ Дитя клана\n"
+        "🛡️ Старейшина\n"
+        "👤 Участник"
+    )
+
+
+@router.callback_query(F.data == AdminBtn.AUDIT)
+async def cb_audit(callback: CallbackQuery, user_service: UserService) -> None:
+    role = await _check_admin(callback, user_service)
+    if role is None:
+        return
+    await callback.answer()
+    await callback.message.answer(
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "📋 <b>Журнал действий</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Выберите категорию для просмотра:",
+        reply_markup=audit_menu_kb(role),
+    )
+
+
+@router.callback_query(F.data == AdminBtn.SETTINGS)
+async def cb_settings(callback: CallbackQuery, user_service: UserService) -> None:
+    await _wip_callback(callback, user_service, "⚙️ Настройки")

@@ -50,7 +50,9 @@ def resolve_public_host() -> str | None:
 async def on_startup(
     bot: Bot, db: Database, dp: Dispatcher, webhook_url: str, **_kwargs
 ) -> None:
+    import datetime
     logger = logging.getLogger(__name__)
+    dp["bot_start_time"] = datetime.datetime.now(datetime.timezone.utc)
     await db.connect()
     me = await bot.get_me()
     dp["bot_username"] = me.username or ""
@@ -68,6 +70,8 @@ async def on_shutdown(bot: Bot, db: Database, **_kwargs) -> None:
 async def on_startup_polling(
     bot: Bot, db: Database, dp: Dispatcher, **_kwargs
 ) -> None:
+    import datetime
+    dp["bot_start_time"] = datetime.datetime.now(datetime.timezone.utc)
     await db.connect()
     me = await bot.get_me()
     dp["bot_username"] = me.username or ""

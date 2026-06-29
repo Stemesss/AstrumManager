@@ -4,34 +4,34 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 class AdminBtn:
-    """Callback-данные кнопок панели администратора."""
-    MEMBERS = "admin:members"
-    NEWS = "admin:news"
-    EVENTS = "admin:events"
-    GUIDES = "admin:guides"
+    """Callback-данные кнопок панели администрации."""
+    MEMBERS    = "admin:members"
+    ROLES      = "admin:roles"
+    NEWS       = "admin:news"
+    EVENTS     = "admin:events"
+    GUIDES     = "admin:guides"
     SCREENSHOTS = "admin:screenshots"
-    COMMUNITY = "admin:community"
+    AUDIT      = "admin:audit"
+    SETTINGS   = "admin:settings"
 
 
 ADMIN_PANEL_KB = InlineKeyboardMarkup(
     inline_keyboard=[
         [
-            InlineKeyboardButton(text="👥 Управление участниками", callback_data=AdminBtn.MEMBERS),
+            InlineKeyboardButton(text="📰 Новости",             callback_data=AdminBtn.NEWS),
+            InlineKeyboardButton(text="📅 События",             callback_data=AdminBtn.EVENTS),
         ],
         [
-            InlineKeyboardButton(text="📢 Управление новостями", callback_data=AdminBtn.NEWS),
+            InlineKeyboardButton(text="📚 Гайды",               callback_data=AdminBtn.GUIDES),
+            InlineKeyboardButton(text="📸 Скриншоты",           callback_data=AdminBtn.SCREENSHOTS),
         ],
         [
-            InlineKeyboardButton(text="📅 Управление событиями", callback_data=AdminBtn.EVENTS),
+            InlineKeyboardButton(text="👥 Участники",           callback_data=AdminBtn.MEMBERS),
+            InlineKeyboardButton(text="🎖️ Управление ролями",   callback_data=AdminBtn.ROLES),
         ],
         [
-            InlineKeyboardButton(text="📚 Управление гайдами", callback_data=AdminBtn.GUIDES),
-        ],
-        [
-            InlineKeyboardButton(text="📸 Управление скриншотами", callback_data=AdminBtn.SCREENSHOTS),
-        ],
-        [
-            InlineKeyboardButton(text="⚙️ Настройки сообщества", callback_data=AdminBtn.COMMUNITY),
+            InlineKeyboardButton(text="📋 Журнал действий",     callback_data=AdminBtn.AUDIT),
+            InlineKeyboardButton(text="⚙️ Настройки",           callback_data=AdminBtn.SETTINGS),
         ],
     ]
 )
