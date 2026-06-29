@@ -8,12 +8,18 @@ TopicService — единая точка управления системным
     await topic_service.get_thread_id(key)    → int | None
     await topic_service.list_topics()         → list[ForumTopic]
 
-    # Создание / синхронизация (обращается к Telegram API)
+    # Иконки — работает с Telegram API
+    await topic_service.get_icon_stickers(bot)           → list[Sticker]
+    await topic_service.find_matching_icon(bot, key)     → str | None
+    await topic_service.apply_topic_icon(bot, key, id)   → bool
+    await topic_service.sync_all_icons(bot)              → dict (отчёт)
+
+    # Создание / синхронизация тем — работает с Telegram API
     await topic_service.create_system_topic(bot, key)  → int | None
-    await topic_service.sync_all_topics(bot)           → SyncReport (dict)
+    await topic_service.sync_all_topics(bot)           → dict (отчёт)
 
     # Быстрая проверка при запуске (без API)
-    await topic_service.check_topics_startup()  → list[str]  # ключи отсутствующих тем
+    await topic_service.check_topics_startup()  → list[str]
 
     # Публикация контента
     await topic_service.publish(bot, key, text)
@@ -43,6 +49,9 @@ class TopicService:
     def __init__(self, db: Database, chat_id: int) -> None:
         self._db = db
         self._chat_id = chat_id
+        # Кэш списка иконок-стикеров (getForumTopicIconStickers).
+        # Заполняется при первом запросе; не меняется в течение жизни процесса.
+        self._icon_stickers: list | None = None
 
     @property
     def chat_id(self) -> int:
@@ -70,7 +79,10 @@ class TopicService:
     ) -> None:
         """Сохраняет (или обновляет) параметры ветки в БД."""
         await self._db.topic_set(topic_name, thread_id, icon_custom_emoji_id)
-        logger.info("Ветка '%s' → thread_id=%s emoji=%s", topic_name, thread_id, icon_custom_emoji_id)
+        logger.info(
+            "Ветка '%s' → thread_id=%s emoji=%s",
+            topic_name, thread_id, icon_custom_emoji_id,
+        )
 
     async def get_topic(self, topic_name: str) -> ForumTopic | None:
         """Возвращает ForumTopic из БД или None."""
@@ -109,30 +121,192 @@ class TopicService:
                 await self._db.topic_set(name, thread_id)
                 logger.info("Посев: ветка '%s' → thread_id=%d", name, thread_id)
 
+    # ── Иконки тем (Telegram API) ──────────────────────────────────────────────
+
+    async def get_icon_stickers(self, bot: Bot) -> list:
+        """
+        Возвращает список доступных стикеров-иконок для форумных тем.
+        Результат кэшируется в памяти на весь срок жизни процесса.
+
+        Каждый стикер имеет:
+            .emoji            — символ Unicode-эмодзи (str | None)
+            .custom_emoji_id  — ID, используемый в createForumTopic / editForumTopic
+
+        Telegram Bot API: getForumTopicIconStickers не требует аргументов.
+        """
+        if self._icon_stickers is None:
+            self._icon_stickers = await bot.get_forum_topic_icon_stickers()
+            logger.info(
+                "Загружено %d иконок-стикеров (кэш заполнен)",
+                len(self._icon_stickers),
+            )
+        return self._icon_stickers
+
+    def _build_emoji_map(self, stickers: list) -> dict[str, str]:
+        """
+        Строит словарь emoji → custom_emoji_id из списка стикеров.
+        При дублировании emoji берётся первый стикер (что соответствует порядку Telegram).
+        """
+        result: dict[str, str] = {}
+        for s in stickers:
+            if s.custom_emoji_id and s.emoji and s.emoji not in result:
+                result[s.emoji] = s.custom_emoji_id
+        return result
+
+    async def find_matching_icon(self, bot: Bot, topic_key: str) -> str | None:
+        """
+        Ищет custom_emoji_id, соответствующий эмодзи темы в реестре.
+        Возвращает None, если подходящий стикер не найден.
+        """
+        defn = TOPIC_REGISTRY.get(topic_key)
+        if not defn:
+            return None
+        try:
+            stickers  = await self.get_icon_stickers(bot)
+            emoji_map = self._build_emoji_map(stickers)
+            return emoji_map.get(defn.emoji)
+        except Exception as exc:
+            logger.warning("find_matching_icon '%s': %s", topic_key, exc)
+            return None
+
+    async def apply_topic_icon(self, bot: Bot, topic_key: str, emoji_id: str) -> bool:
+        """
+        Применяет icon_custom_emoji_id к существующей теме через editForumTopic
+        и сохраняет значение в БД.
+
+        Telegram Bot API: editForumTopic позволяет менять name И icon_custom_emoji_id
+        существующей темы (в отличие от icon_color, который задаётся только при создании).
+
+        Возвращает True при успехе (в т.ч. если TOPIC_NOT_MODIFIED — иконка уже та).
+        """
+        topic = await self.get_topic(topic_key)
+        if not topic or topic.message_thread_id is None:
+            logger.warning("apply_topic_icon '%s': тема не настроена", topic_key)
+            return False
+        try:
+            await bot.edit_forum_topic(
+                chat_id=self._chat_id,
+                message_thread_id=topic.message_thread_id,
+                icon_custom_emoji_id=emoji_id,
+            )
+            await self.set_topic(topic_key, topic.message_thread_id, emoji_id)
+            logger.info(
+                "Иконка '%s' #%d → emoji_id=%s",
+                topic_key, topic.message_thread_id, emoji_id,
+            )
+            return True
+        except TelegramBadRequest as exc:
+            if "TOPIC_NOT_MODIFIED" in str(exc):
+                # Иконка уже та самая — сохраняем в БД для синхронности
+                await self.set_topic(topic_key, topic.message_thread_id, emoji_id)
+                return True
+            logger.warning("apply_topic_icon '%s': %s", topic_key, exc)
+            return False
+        except Exception as exc:
+            logger.warning("apply_topic_icon '%s': %s", topic_key, exc)
+            return False
+
+    async def sync_all_icons(self, bot: Bot) -> dict:
+        """
+        Автоматически назначает иконки всем темам, у которых ещё нет icon_custom_emoji_id.
+        Темы с уже установленной иконкой пропускаются (не перезаписываются).
+
+        Алгоритм для каждой темы:
+          - Нет thread_id → "no_thread" (тема не настроена, пропуск)
+          - Есть icon_custom_emoji_id в БД → "already_set" (пропуск)
+          - Нет иконки → ищет стикер по emoji → применяет
+              Нашёл → "applied"
+              Не нашёл → "no_match"
+
+        Возвращает отчёт-словарь:
+        {
+          "applied":     [keys],
+          "already_set": [keys],
+          "no_match":    [keys],
+          "no_thread":   [keys],
+          "errors":      {key: msg},
+          "fetch_error": str | None,
+        }
+        """
+        report: dict = {
+            "applied":     [],
+            "already_set": [],
+            "no_match":    [],
+            "no_thread":   [],
+            "errors":      {},
+            "fetch_error": None,
+        }
+
+        # Загружаем стикеры (с кэшем)
+        try:
+            stickers  = await self.get_icon_stickers(bot)
+            emoji_map = self._build_emoji_map(stickers)
+        except Exception as exc:
+            report["fetch_error"] = str(exc)
+            logger.error("sync_all_icons: не удалось получить стикеры: %s", exc)
+            return report
+
+        for topic_key, defn in TOPIC_REGISTRY.items():
+            topic     = await self.get_topic(topic_key)
+            thread_id = topic.message_thread_id if topic else None
+
+            if thread_id is None:
+                report["no_thread"].append(topic_key)
+                continue
+
+            if topic and topic.icon_custom_emoji_id:
+                # Иконка уже установлена — не трогаем
+                report["already_set"].append(topic_key)
+                continue
+
+            emoji_id = emoji_map.get(defn.emoji)
+            if not emoji_id:
+                report["no_match"].append(topic_key)
+                continue
+
+            ok = await self.apply_topic_icon(bot, topic_key, emoji_id)
+            if ok:
+                report["applied"].append(topic_key)
+            else:
+                report["errors"][topic_key] = "Не удалось применить"
+
+        return report
+
     # ── Управление темами через Telegram API ───────────────────────────────────
 
     async def create_system_topic(self, bot: Bot, topic_key: str) -> int | None:
         """
-        Создаёт форумную тему в Telegram и сохраняет thread_id в БД.
+        Создаёт форумную тему в Telegram, автоматически подбирает иконку
+        и сохраняет thread_id + icon_custom_emoji_id в БД.
+
+        Ограничение Telegram:
+          - icon_color нельзя изменить после создания.
+          - icon_custom_emoji_id можно поменять позже через editForumTopic.
 
         Требует, чтобы бот имел права can_manage_topics в группе.
         Возвращает thread_id созданной темы или None при ошибке.
-
-        Ограничение Telegram: icon_color нельзя изменить после создания.
         """
         defn = TOPIC_REGISTRY.get(topic_key)
         if not defn:
             logger.error("create_system_topic: неизвестный ключ '%s'", topic_key)
             return None
+
+        # Пробуем автоматически подобрать иконку
+        emoji_id = await self.find_matching_icon(bot, topic_key)
+
         try:
             tg_topic = await bot.create_forum_topic(
                 chat_id=self._chat_id,
                 name=defn.name,
                 icon_color=defn.icon_color,
+                icon_custom_emoji_id=emoji_id,  # None — создаётся с цветом без кастомной иконки
             )
             thread_id = tg_topic.message_thread_id
-            await self.set_topic(topic_key, thread_id)
-            logger.info("Создана тема '%s' → thread_id=%d", topic_key, thread_id)
+            await self.set_topic(topic_key, thread_id, emoji_id)
+            logger.info(
+                "Создана тема '%s' → thread_id=%d emoji_id=%s",
+                topic_key, thread_id, emoji_id,
+            )
             return thread_id
         except TelegramForbiddenError as exc:
             logger.warning("create_system_topic '%s': нет прав → %s", topic_key, exc)
@@ -146,25 +320,26 @@ class TopicService:
 
     async def sync_all_topics(self, bot: Bot) -> dict:
         """
-        Синхронизирует все системные темы с Telegram.
+        Синхронизирует все системные темы с Telegram (имена; иконки — через sync_all_icons).
 
         Алгоритм для каждой темы из реестра:
         - Если thread_id настроен → вызывает editForumTopic для проверки/исправления имени.
-          Ограничение Telegram: editForumTopic меняет name и icon_custom_emoji_id,
-          но НЕ icon_color (цвет задаётся только при создании).
-        - Если thread_id не настроен → вызывает create_system_topic.
+          Telegram API: editForumTopic меняет name и icon_custom_emoji_id;
+          icon_color нельзя менять после создания.
+        - Если thread_id не настроен → вызывает create_system_topic
+          (автоматически подбирает иконку при создании).
 
         Возвращает словарь-отчёт:
         {
-          "created":      [keys],   # созданы новые темы
-          "name_fixed":   [keys],   # исправлены названия
-          "ok":           [keys],   # всё в порядке
-          "missing":      [keys],   # тема удалена из Telegram (thread не найден)
-          "no_permission":[keys],   # нет прав (can_manage_topics)
-          "errors":       {key: msg},
+          "created":       [keys],
+          "name_fixed":    [keys],
+          "ok":            [keys],
+          "missing":       [keys],
+          "no_permission": [keys],
+          "errors":        {key: msg},
         }
 
-        Синхронизация безопасна: не удаляет и не пересоздаёт темы.
+        Синхронизация безопасна: не удаляет и не пересоздаёт существующие темы.
         """
         report: dict = {
             "created":       [],
@@ -180,30 +355,27 @@ class TopicService:
             thread_id = topic.message_thread_id if (topic and topic.enabled) else None
 
             if thread_id is None:
-                # Тема не настроена — создаём
+                # Тема не настроена — создаём (с автоподбором иконки)
                 new_id = await self.create_system_topic(bot, topic_key)
                 if new_id is not None:
                     report["created"].append(topic_key)
                 else:
                     report["no_permission"].append(topic_key)
             else:
-                # Тема настроена — проверяем/исправляем через editForumTopic
+                # Тема настроена — проверяем/исправляем имя через editForumTopic
                 try:
                     await bot.edit_forum_topic(
                         chat_id=self._chat_id,
                         message_thread_id=thread_id,
                         name=defn.name,
                     )
-                    # Успешный edit означает, что имя было другим и теперь исправлено
                     report["name_fixed"].append(topic_key)
                     logger.info("Исправлено имя темы '%s' #%d", topic_key, thread_id)
                 except TelegramBadRequest as exc:
                     msg = str(exc)
                     if "TOPIC_NOT_MODIFIED" in msg:
-                        # Имя и так совпадает — всё в порядке
                         report["ok"].append(topic_key)
                     elif "MESSAGE_THREAD_NOT_FOUND" in msg or "THREAD_NOT_FOUND" in msg:
-                        # Тема удалена из Telegram; сбрасываем thread_id в БД
                         await self.set_topic(topic_key, None)
                         report["missing"].append(topic_key)
                         logger.warning(
@@ -343,7 +515,6 @@ class TopicService:
         docs   = attachments.get("documents", [])
 
         try:
-            # ── Медиагруппа (фото и видео) ───────────────────────────────────
             all_media: list = []
             for i, p in enumerate(photos):
                 caption = text if i == 0 else None
@@ -386,7 +557,6 @@ class TopicService:
                         message_thread_id=thread_id,
                     )
             else:
-                # Только документы: сначала текст, потом файлы
                 await bot.send_message(
                     chat_id=self._chat_id,
                     text=text,

@@ -33,6 +33,7 @@ def topics_menu_kb(topics: list[ForumTopic]) -> InlineKeyboardMarkup:
         ])
     rows.append([
         InlineKeyboardButton(text="🔄 Синхронизировать", callback_data=TopicBtn.SYNC),
+        InlineKeyboardButton(text="🎨 Иконки тем",       callback_data="icons:panel"),
     ])
     rows.append([
         InlineKeyboardButton(text="⬅️ Назад", callback_data=TopicBtn.BACK),
