@@ -258,13 +258,12 @@ class Database:
         """Количество новых пользователей за каждый из последних N дней."""
         return await self.repositories.users.count_by_day(days)
 
-    async def _stats_best_since(self, since_expr: str) -> aiosqlite.Row | None:
+    async def _stats_best_since(self, period: str) -> aiosqlite.Row | None:
         """
-        Участник с максимальными очками начиная с `since_expr` (SQLite-выражение).
+        Участник с максимальными очками начиная с заданного периода.
         Формула: news_create=5, guide_create=10, screenshot_upload=2, event_create=8.
-        since_expr встраивается напрямую — передавать только хардкоженные константы.
         """
-        return await self.repositories.stats.best_since(since_expr)
+        return await self.repositories.stats.best_since(period)
 
     # ── Сводные методы для карточек контента ───────────────────────────────
 
@@ -308,11 +307,11 @@ class Database:
 
     async def stats_best_of_month(self) -> aiosqlite.Row | None:
         """Победитель текущего календарного месяца."""
-        return await self._stats_best_since("strftime('%Y-%m-01', 'now')")
+        return await self._stats_best_since("month")
 
     async def stats_best_of_week(self) -> aiosqlite.Row | None:
         """Победитель последних 7 дней."""
-        return await self._stats_best_since("datetime('now', '-6 days')")
+        return await self._stats_best_since("week")
 
     # ------------------------------------------------------------------ #
     # Методы работы с ветками форума (forum_topics)

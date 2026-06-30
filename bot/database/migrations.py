@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 
 import aiosqlite
@@ -110,6 +111,10 @@ async def _column_exists(
     table_name: str,
     column_name: str,
 ) -> bool:
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table_name):
+        raise ValueError(f"Некорректное имя таблицы: {table_name!r}")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", column_name):
+        raise ValueError(f"Некорректное имя столбца: {column_name!r}")
     async with conn.execute(f"PRAGMA table_info({table_name})") as cur:
         rows = await cur.fetchall()
     return any(row[1] == column_name for row in rows)

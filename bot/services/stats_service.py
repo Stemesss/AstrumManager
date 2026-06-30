@@ -68,12 +68,12 @@ class StatsService:
 
     async def best_of_month(self) -> UserActivity | None:
         """Участник с максимальными очками за текущий календарный месяц."""
-        row = await self._stats.best_since("strftime('%Y-%m-01', 'now')")
+        row = await self._stats.best_since("month")
         return self._row_to_activity(row) if row else None
 
     async def best_of_week(self) -> UserActivity | None:
         """Участник с максимальными очками за последние 7 дней."""
-        row = await self._stats.best_since("datetime('now', '-6 days')")
+        row = await self._stats.best_since("week")
         return self._row_to_activity(row) if row else None
 
     # ─────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from bot.database.repositories.base import BaseRepository
 
+_BEST_SINCE_EXPRESSIONS = {
+    "month": "strftime('%Y-%m-01', 'now')",
+    "week": "datetime('now', '-6 days')",
+}
+
 
 class StatsRepository(BaseRepository):
     async def top_active_users(self, limit: int = 10):
@@ -84,7 +89,10 @@ class StatsRepository(BaseRepository):
             (user_id,),
         )
 
-    async def best_since(self, since_expr: str):
+    async def best_since(self, period: str):
+        since_expr = _BEST_SINCE_EXPRESSIONS.get(period)
+        if since_expr is None:
+            raise ValueError(f"Неизвестный период статистики: {period}")
         sql = f"""
         SELECT
             al.user_id,
