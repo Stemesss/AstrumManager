@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass, field
 
 DEFAULT_WEBHOOK_PATH = "/api/telegram/webhook"
+DEFAULT_GROUP_CHAT_ID = -1004463841801
 
 
 @dataclass(frozen=True)
@@ -39,7 +40,7 @@ class Config:
     bot_token: str
     db_path: str = field(default="data/astrum.db")
     owner_id: int | None = field(default=None)
-    group_chat_id: int = field(default=-1004463841801)
+    group_chat_id: int = field(default=DEFAULT_GROUP_CHAT_ID)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     features: FeatureFlags = field(default_factory=FeatureFlags)
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
@@ -93,7 +94,7 @@ def load_config() -> Config:
 
     db_path = os.getenv("DB_PATH", "data/astrum.db")
     owner_id = _parse_optional_int("BOT_OWNER_ID")
-    group_chat_id = _parse_optional_int("GROUP_CHAT_ID", -1004463841801)
+    group_chat_id = _parse_optional_int("GROUP_CHAT_ID", DEFAULT_GROUP_CHAT_ID)
     runtime_port = _parse_optional_int("PORT")
     if runtime_port is None:
         runtime_port = _parse_optional_int("WEBHOOK_PORT", 6000)
