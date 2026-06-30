@@ -6,7 +6,7 @@ from threading import Lock
 
 
 def _escape_label(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"')
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
 
 
 class MetricsRegistry:

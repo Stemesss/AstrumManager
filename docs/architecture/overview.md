@@ -26,16 +26,16 @@
 
 Последовательность запуска:
 
-1. `setup_logging()`
-2. `load_config()`
+1. `load_config()`
+2. `setup_logging(level_name)`
 3. создание `Bot`
 4. создание `Database`
-5. `build_dispatcher(db, owner_id, group_chat_id)`
+5. `build_dispatcher(db, config, owner_id, group_chat_id, metrics)`
 6. выбор runtime:
    - `run_webhook(...)`, если найден публичный хост;
    - `run_polling(...)`, если публичный хост отсутствует.
 
-Webhook path зафиксирован как `/api/telegram/webhook`.
+Webhook path по умолчанию равен `/api/telegram/webhook`, но может быть переопределён через `WEBHOOK_PATH`.
 
 ### 2.2 Node.js proxy
 
@@ -52,7 +52,7 @@ Express-приложение:
 
 ### 3.1 Webhook mode
 
-Выбирается, если `resolve_public_host()` нашёл один из источников:
+Выбирается, если `bot/config/settings.py::_resolve_public_host()` нашёл один из источников:
 
 1. `WEBHOOK_BASE_URL`
 2. `REPLIT_DOMAINS`
@@ -87,11 +87,19 @@ Express-приложение:
 - `DB_PATH` — путь к SQLite, по умолчанию `data/astrum.db`
 - `BOT_OWNER_ID`
 - `GROUP_CHAT_ID`
+- `LOG_LEVEL`
 - `WEBHOOK_BASE_URL`
 - `REPLIT_DOMAINS`
 - `RAILWAY_PUBLIC_DOMAIN`
+- `WEBHOOK_PATH`
 - `WEBHOOK_PORT`
 - `PORT`
+- `FEATURE_OBSERVABILITY`
+- `FEATURE_HEALTHCHECK`
+- `FEATURE_METRICS`
+- `OBSERVABILITY_HOST`
+- `OBSERVABILITY_PORT`
+- `OBSERVABILITY_PATH_PREFIX`
 
 ### Для Node.js proxy
 

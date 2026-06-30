@@ -12,13 +12,13 @@
 - Если найден публичный URL, бот обязан работать через webhook.
 - Если публичный URL не найден, бот обязан уметь работать через polling.
 
-Это поведение завязано на `resolve_public_host()` и не должно ломаться без отдельного migration-плана.
+Это поведение завязано на `bot/config/settings.py::_resolve_public_host()` и не должно ломаться без отдельного migration-плана.
 
 ## 2. Контракт webhook proxy
 
-Путь webhook жёстко согласован между компонентами:
+Путь webhook согласован между компонентами по умолчанию:
 
-- Python: `main.py` использует `/api/telegram/webhook`
+- Python: `main.py` использует `config.runtime.webhook_path`, по умолчанию `/api/telegram/webhook`
 - Node.js: `artifacts/api-server/src/routes/telegram.ts` проксирует `/api/telegram/*`
 
 Следствие:
@@ -40,6 +40,9 @@
 - `db`
 - `owner_id`
 - `group_chat_id`
+- `config`
+- `feature_flags`
+- `metrics`
 - `bot_username`
 - `bot_start_time`
 
