@@ -11,6 +11,9 @@
 from datetime import date, timedelta
 
 from bot.database.db import Database
+from bot.database.repositories.news_repository import NewsRepository
+from bot.database.repositories.stats_repository import StatsRepository
+from bot.database.repositories.user_repository import UserRepository
 from bot.models.audit import AuditAction
 from bot.models.stats import AuthorStat, ClanGrowth, ContentStats, NewsStats, UserActivity
 
@@ -19,7 +22,9 @@ class StatsService:
     """Вычисляет всю статистику напрямую из БД."""
 
     def __init__(self, db: Database) -> None:
-        self._db = db
+        self._stats = StatsRepository(db)
+        self._news = NewsRepository(db)
+        self._users = UserRepository(db)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Активность участников
@@ -27,7 +32,7 @@ class StatsService:
 
     async def top_active_users(self, limit: int = 10) -> list[UserActivity]:
         """Возвращает список участников, отсортированных по очкам (убывание)."""
-        rows = await self._db.stats_top_active_users(limit)
+        rows = await self._stats.top_active_users(limit)
         return [
             UserActivity(
                 user_id=r["user_id"],
@@ -63,12 +68,12 @@ class StatsService:
 
     async def best_of_month(self) -> UserActivity | None:
         """Участник с максимальными очками за текущий календарный месяц."""
-        row = await self._db.stats_best_of_month()
+        row = await self._stats.best_since("strftime('%Y-%m-01', 'now')")
         return self._row_to_activity(row) if row else None
 
     async def best_of_week(self) -> UserActivity | None:
         """Участник с максимальными очками за последние 7 дней."""
-        row = await self._db.stats_best_of_week()
+        row = await self._stats.best_since("datetime('now', '-6 days')")
         return self._row_to_activity(row) if row else None
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -77,9 +82,9 @@ class StatsService:
 
     async def news_stats(self) -> NewsStats:
         """Статистика из таблицы news."""
-        total_rows = await self._db.stats_count_news()
-        author_rows = await self._db.stats_news_by_author(limit=5)
-        latest = await self._db.stats_news_latest()
+        total_rows = await self._news.count_all()
+        author_rows = await self._news.top_authors(limit=5)
+        latest = await self._news.latest()
 
         return NewsStats(
             total=total_rows,
@@ -93,9 +98,9 @@ class StatsService:
     # ─────────────────────────────────────────────────────────────────────────
 
     async def _content_stats(self, create_action: str) -> ContentStats:
-        total = await self._db.stats_count_action(create_action)
-        top_rows = await self._db.stats_content_by_user(create_action, limit=5)
-        latest = await self._db.stats_content_latest(create_action)
+        total = await self._stats.count_action(create_action)
+        top_rows = await self._stats.content_by_user(create_action, limit=5)
+        latest = await self._stats.content_latest(create_action)
 
         return ContentStats(
             total=total,
@@ -117,7 +122,9 @@ class StatsService:
     # Публичные псевдонимы с коротким именем (для handlers/statistics.py)
     async def news(self) -> NewsStats:
         """Статистика новостей (псевдоним news_stats, top=3)."""
-        total, top_rows, latest = await self._db.stats_news(top_limit=3)
+        total = await self._news.count_all()
+        top_rows = await self._news.top_authors(limit=3)
+        latest = await self._news.latest()
         return NewsStats(
             total=total,
             top_authors=[AuthorStat(name=r["author_name"], count=r["count"]) for r in top_rows],
@@ -127,7 +134,9 @@ class StatsService:
 
     async def guides(self) -> ContentStats:
         """Статистика гайдов (top=3)."""
-        total, top_rows, latest = await self._db.stats_guides(top_limit=3)
+        total = await self._stats.count_action(AuditAction.GUIDE_CREATE)
+        top_rows = await self._stats.content_by_user(AuditAction.GUIDE_CREATE, limit=3)
+        latest = await self._stats.content_latest(AuditAction.GUIDE_CREATE)
         return ContentStats(
             total=total,
             top_authors=[AuthorStat(name=r["game_nick"] or "—", count=r["count"]) for r in top_rows],
@@ -137,7 +146,9 @@ class StatsService:
 
     async def screenshots(self) -> ContentStats:
         """Статистика скриншотов (top=3)."""
-        total, top_rows, latest = await self._db.stats_screenshots(top_limit=3)
+        total = await self._stats.count_action(AuditAction.SCREENSHOT_UPLOAD)
+        top_rows = await self._stats.content_by_user(AuditAction.SCREENSHOT_UPLOAD, limit=3)
+        latest = await self._stats.content_latest(AuditAction.SCREENSHOT_UPLOAD)
         return ContentStats(
             total=total,
             top_authors=[AuthorStat(name=r["game_nick"] or "—", count=r["count"]) for r in top_rows],
@@ -146,7 +157,9 @@ class StatsService:
 
     async def events(self) -> ContentStats:
         """Статистика событий (top=3)."""
-        total, top_rows, latest = await self._db.stats_events(top_limit=3)
+        total = await self._stats.count_action(AuditAction.EVENT_CREATE)
+        top_rows = await self._stats.content_by_user(AuditAction.EVENT_CREATE, limit=3)
+        latest = await self._stats.content_latest(AuditAction.EVENT_CREATE)
         return ContentStats(
             total=total,
             top_authors=[AuthorStat(name=r["game_nick"] or "—", count=r["count"]) for r in top_rows],
@@ -156,7 +169,7 @@ class StatsService:
 
     async def user_activity(self, user_id: int) -> dict:
         """Статистика публикаций и очки активности одного участника."""
-        row = await self._db.stats_user_activity(user_id)
+        row = await self._stats.user_activity(user_id)
         if not row:
             return {"score": 0, "news": 0, "guides": 0, "screenshots": 0, "events": 0}
         return {
@@ -173,8 +186,11 @@ class StatsService:
 
     async def clan_growth(self, chart_days: int = 7) -> ClanGrowth:
         """Динамика прироста участников."""
-        total, today, week, month = await self._db.stats_users_joined()
-        raw_rows = await self._db.stats_users_by_day(chart_days)
+        total = await self._users.count_all()
+        today = await self._users.count_joined_today()
+        week = await self._users.count_joined_since_days(7)
+        month = await self._users.count_joined_since_days(30)
+        raw_rows = await self._users.count_by_day(chart_days)
 
         # Заполняем пропущенные дни нулями
         db_map: dict[str, int] = {r["day"]: r["cnt"] for r in raw_rows}

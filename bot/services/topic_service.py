@@ -32,6 +32,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import InputMediaPhoto, InputMediaVideo
 
 from bot.database.db import Database
+from bot.database.repositories.topic_repository import TopicRepository
 from bot.models.topic import (
     ALL_TOPIC_NAMES,
     DEFAULT_THREAD_IDS,
@@ -47,7 +48,7 @@ class TopicService:
     """Единый менеджер системных форумных тем."""
 
     def __init__(self, db: Database, chat_id: int) -> None:
-        self._db = db
+        self._topics = TopicRepository(db)
         self._chat_id = chat_id
         # Кэш списка иконок-стикеров (getForumTopicIconStickers).
         # Заполняется при первом запросе; не меняется в течение жизни процесса.
@@ -78,7 +79,7 @@ class TopicService:
         icon_custom_emoji_id: str | None = None,
     ) -> None:
         """Сохраняет (или обновляет) параметры ветки в БД."""
-        await self._db.topic_set(topic_name, thread_id, icon_custom_emoji_id)
+        await self._topics.set(topic_name, thread_id, icon_custom_emoji_id)
         logger.info(
             "Ветка '%s' → thread_id=%s emoji=%s",
             topic_name, thread_id, icon_custom_emoji_id,
@@ -86,7 +87,7 @@ class TopicService:
 
     async def get_topic(self, topic_name: str) -> ForumTopic | None:
         """Возвращает ForumTopic из БД или None."""
-        row = await self._db.topic_get(topic_name)
+        row = await self._topics.get(topic_name)
         return self._to_model(row) if row else None
 
     async def get_thread_id(self, topic_name: str) -> int | None:
@@ -101,7 +102,7 @@ class TopicService:
 
     async def list_topics(self) -> list[ForumTopic]:
         """Список всех тем в порядке реестра (из БД + заглушки для ненастроенных)."""
-        rows = await self._db.topic_list()
+        rows = await self._topics.list_all()
         configured = {r["topic_name"]: self._to_model(r) for r in rows}
         return [
             configured.get(name, ForumTopic(topic_name=name, message_thread_id=None))
@@ -116,9 +117,9 @@ class TopicService:
         Пропускает темы, уже настроенные администратором.
         """
         for name, thread_id in DEFAULT_THREAD_IDS.items():
-            existing = await self._db.topic_get(name)
+            existing = await self._topics.get(name)
             if existing is None:
-                await self._db.topic_set(name, thread_id)
+                await self._topics.set(name, thread_id)
                 logger.info("Посев: ветка '%s' → thread_id=%d", name, thread_id)
 
     # ── Иконки тем (Telegram API) ──────────────────────────────────────────────
