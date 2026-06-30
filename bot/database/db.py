@@ -139,6 +139,18 @@ class Database:
             raise RuntimeError("База данных не подключена — вызовите connect() сначала")
         return self._conn
 
+    async def ping(self) -> bool:
+        """Проверяет доступность активного соединения с БД."""
+        if self._conn is None:
+            return False
+        try:
+            async with self.conn.execute("SELECT 1") as cur:
+                row = await cur.fetchone()
+            return bool(row and row[0] == 1)
+        except Exception:
+            logger.exception("Проверка доступности БД завершилась ошибкой")
+            return False
+
     # ------------------------------------------------------------------ #
     # Методы работы с пользователями
     # ------------------------------------------------------------------ #

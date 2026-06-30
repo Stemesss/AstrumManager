@@ -1,5 +1,19 @@
 # -*- coding: utf-8 -*-
 """Пакет конфигурации — публичный API совместим со старым bot/config.py."""
-from bot.config.settings import Config, load_config
+from bot.config.settings import (
+    DEFAULT_WEBHOOK_PATH,
+    Config,
+    FeatureFlags,
+    ObservabilityConfig,
+    RuntimeConfig,
+    load_config,
+)
 
-__all__ = ["Config", "load_config"]
+__all__ = [
+    "Config",
+    "DEFAULT_WEBHOOK_PATH",
+    "FeatureFlags",
+    "ObservabilityConfig",
+    "RuntimeConfig",
+    "load_config",
+]

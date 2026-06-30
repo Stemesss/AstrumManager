@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import logging
-import os
 import sys
 from functools import partial
 
@@ -11,43 +10,25 @@ from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
-from bot.config import load_config
+from bot.config import Config, load_config
 from bot.database.db import Database
 from bot.handlers import admin, audit, cancel, common, complaints, content, debug, echo, group, group_nick, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, topics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.middlewares.nick_gate import NickGateMiddleware
+from bot.observability import HealthService, MetricsRegistry, ObservabilityServer, register_observability_routes
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
 from bot.services.stats_service import StatsService
 from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 
-WEBHOOK_PATH = "/api/telegram/webhook"
-
-
-def setup_logging() -> None:
+def setup_logging(level_name: str = "INFO") -> None:
+    level = getattr(logging, level_name.upper(), logging.INFO)
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         stream=sys.stdout,
     )
-
-
-def resolve_public_host() -> str | None:
-    """Возвращает публичный хост для регистрации вебхука или None для режима polling."""
-    override = os.getenv("WEBHOOK_BASE_URL", "").strip()
-    if override:
-        return override.rstrip("/")
-
-    replit = os.getenv("REPLIT_DOMAINS", "").split(",")[0].strip()
-    if replit:
-        return f"https://{replit}"
-
-    railway = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
-    if railway:
-        return f"https://{railway}"
-
-    return None
 
 
 async def _check_topics_on_startup(dp: Dispatcher) -> None:
@@ -73,6 +54,9 @@ async def on_startup(
     import datetime
     logger = logging.getLogger(__name__)
     dp["bot_start_time"] = datetime.datetime.now(datetime.timezone.utc)
+    metrics: MetricsRegistry | None = dp["metrics"]
+    if metrics:
+        metrics.mark_startup("webhook")
     await db.connect()
     await dp["topic_service"].seed_default_topics()
     await _check_topics_on_startup(dp)
@@ -86,33 +70,52 @@ async def on_startup(
 
 async def on_shutdown(bot: Bot, db: Database, **_kwargs) -> None:
     await bot.delete_webhook()
+    metrics: MetricsRegistry | None = _kwargs.get("metrics")
+    if metrics:
+        metrics.mark_shutdown()
     await db.close()
     logging.getLogger(__name__).info("Вебхук удалён")
 
 
 async def on_startup_polling(
-    bot: Bot, db: Database, dp: Dispatcher, **_kwargs
+    bot: Bot, db: Database, dp: Dispatcher, observability_server: ObservabilityServer | None = None, **_kwargs
 ) -> None:
     import datetime
     dp["bot_start_time"] = datetime.datetime.now(datetime.timezone.utc)
+    metrics: MetricsRegistry | None = dp["metrics"]
+    if metrics:
+        metrics.mark_startup("polling")
     await db.connect()
     await dp["topic_service"].seed_default_topics()
     await _check_topics_on_startup(dp)
     me = await bot.get_me()
     dp["bot_username"] = me.username or ""
+    if observability_server:
+        await observability_server.start()
     logging.getLogger(__name__).info(
         "Режим polling — @%s (id=%s)", me.username, me.id
     )
 
 
-async def on_shutdown_polling(db: Database, **_kwargs) -> None:
+async def on_shutdown_polling(
+    db: Database,
+    observability_server: ObservabilityServer | None = None,
+    metrics: MetricsRegistry | None = None,
+    **_kwargs,
+) -> None:
+    if observability_server:
+        await observability_server.stop()
+    if metrics:
+        metrics.mark_shutdown()
     await db.close()
 
 
 def build_dispatcher(
     db: Database,
+    config: Config | None = None,
     owner_id: int | None = None,
     group_chat_id: int = -1004463841801,
+    metrics: MetricsRegistry | None = None,
 ) -> Dispatcher:
     """Создаёт диспетчер с разделением приватных и групповых роутеров."""
     dp = Dispatcher()
@@ -131,10 +134,13 @@ def build_dispatcher(
     dp["group_chat_id"]  = group_chat_id or -1004463841801
     dp["db"]             = db
     dp["owner_id"]       = owner_id
+    dp["config"]         = config
+    dp["feature_flags"]  = config.features if config else None
+    dp["metrics"]        = metrics
     # bot_username устанавливается в on_startup / on_startup_polling
 
     # ── Промежуточный слой (глобальный) ──────────────────────────────────
-    dp.update.middleware(LoggingMiddleware())
+    dp.update.middleware(LoggingMiddleware(metrics=metrics))
 
     # ── Временный отладочный роутер (все типы чатов) — удалить после проверки веток
     dp.include_router(debug.router)
@@ -177,51 +183,102 @@ def build_dispatcher(
     return dp
 
 
-def run_webhook(bot: Bot, dp: Dispatcher, db: Database, public_host: str) -> None:
-    logger = logging.getLogger(__name__)
-    webhook_url = f"{public_host}{WEBHOOK_PATH}"
+def _build_health_service(dp: Dispatcher, db: Database, metrics: MetricsRegistry) -> HealthService:
+    return HealthService(
+        db=db,
+        metrics=metrics,
+        started_at_provider=lambda: dp.workflow_data.get("bot_start_time"),
+    )
 
-    port = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", "6000")))
+
+def run_webhook(bot: Bot, dp: Dispatcher, db: Database, config: Config) -> None:
+    logger = logging.getLogger(__name__)
+    webhook_url = f"{config.runtime.public_host}{config.runtime.webhook_path}"
 
     dp.startup.register(
         partial(on_startup, bot=bot, db=db, dp=dp, webhook_url=webhook_url)
     )
-    dp.shutdown.register(partial(on_shutdown, bot=bot, db=db))
+    dp.shutdown.register(partial(on_shutdown, bot=bot, db=db, metrics=dp["metrics"]))
 
     app = web.Application()
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+    metrics: MetricsRegistry | None = dp["metrics"]
+    if config.features.observability and metrics:
+        paths = register_observability_routes(
+            app=app,
+            features=config.features,
+            observability=config.observability,
+            health_service=_build_health_service(dp, db, metrics),
+            metrics=metrics,
+        )
+        if paths:
+            logger.info("Observability endpoints включены: %s", ", ".join(paths))
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=config.runtime.webhook_path)
     setup_application(app, dp, bot=bot)
 
-    logger.info("Запуск вебхук-сервера на 0.0.0.0:%d, путь %s", port, WEBHOOK_PATH)
-    web.run_app(app, host="0.0.0.0", port=port)
+    logger.info(
+        "Запуск вебхук-сервера на 0.0.0.0:%d, путь %s",
+        config.runtime.port,
+        config.runtime.webhook_path,
+    )
+    web.run_app(app, host="0.0.0.0", port=config.runtime.port)
 
 
-async def run_polling(bot: Bot, dp: Dispatcher, db: Database) -> None:
-    dp.startup.register(partial(on_startup_polling, bot=bot, db=db, dp=dp))
-    dp.shutdown.register(partial(on_shutdown_polling, db=db))
+async def run_polling(
+    bot: Bot,
+    dp: Dispatcher,
+    db: Database,
+    observability_server: ObservabilityServer | None = None,
+) -> None:
+    dp.startup.register(
+        partial(
+            on_startup_polling,
+            bot=bot,
+            db=db,
+            dp=dp,
+            observability_server=observability_server,
+        )
+    )
+    dp.shutdown.register(
+        partial(
+            on_shutdown_polling,
+            db=db,
+            observability_server=observability_server,
+            metrics=dp["metrics"],
+        )
+    )
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
 def main() -> None:
-    setup_logging()
-
     config = load_config()
+    setup_logging(config.runtime.log_level)
     bot = Bot(
         token=config.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     db = Database(config.db_path)
-    dp = build_dispatcher(db, owner_id=config.owner_id, group_chat_id=config.group_chat_id)
+    metrics = MetricsRegistry()
+    dp = build_dispatcher(
+        db,
+        config=config,
+        owner_id=config.owner_id,
+        group_chat_id=config.group_chat_id,
+        metrics=metrics,
+    )
+    observability_server = ObservabilityServer(
+        features=config.features,
+        observability=config.observability,
+        health_service=_build_health_service(dp, db, metrics),
+        metrics=metrics,
+    )
 
-    public_host = resolve_public_host()
-
-    if public_host:
-        run_webhook(bot, dp, db, public_host)
+    if config.runtime.public_host:
+        run_webhook(bot, dp, db, config)
     else:
         logging.getLogger(__name__).info(
             "Публичный хост не найден — запуск в режиме polling (локальная разработка)"
         )
-        asyncio.run(run_polling(bot, dp, db))
+        asyncio.run(run_polling(bot, dp, db, observability_server=observability_server))
 
 
 if __name__ == "__main__":
