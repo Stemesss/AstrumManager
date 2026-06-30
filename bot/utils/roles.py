@@ -30,9 +30,9 @@ ROLE_ORDER: list[UserRole] = [
 # Матрица прав: кто какие роли может назначать
 # Ключ — роль того, кто назначает; значение — множество ролей, которые он может назначить.
 ROLE_CAN_ASSIGN: dict[UserRole, frozenset[UserRole]] = {
-    UserRole.LEADER:     frozenset(UserRole),
-    UserRole.ELDER:      frozenset(UserRole),
-    UserRole.CLAN_CHILD: frozenset(UserRole),
+    UserRole.LEADER:     frozenset({UserRole.LEADER, UserRole.ELDER, UserRole.CLAN_CHILD, UserRole.MEMBER}),
+    UserRole.ELDER:      frozenset({UserRole.LEADER, UserRole.ELDER, UserRole.CLAN_CHILD, UserRole.MEMBER}),
+    UserRole.CLAN_CHILD: frozenset({UserRole.LEADER, UserRole.ELDER, UserRole.CLAN_CHILD, UserRole.MEMBER}),
     UserRole.MEMBER:     frozenset(),
 }
 
