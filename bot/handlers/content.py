@@ -43,7 +43,7 @@ from bot.utils.roles import role_label
 router = Router()
 logger = logging.getLogger(__name__)
 
-_MANAGER_ROLES = {UserRole.LEADER, UserRole.CLAN_CHILD, UserRole.ELDER}
+_MANAGER_ROLES = UserRole.admin_roles()
 
 _MAX_TITLE   = 100
 _MAX_CONTENT = 4000
@@ -475,5 +475,4 @@ async def cb_pin(
         _item_card(item, cfg),
         reply_markup=content_view_kb(content_type, item_id, item.pinned, is_manager),
     )
-
 

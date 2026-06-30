@@ -3,8 +3,8 @@
 Обработчик раздела «🛡️ Администрация».
 
 Доступ:
-  👑 Лидер, ⭐ Дитя клана, 🛡️ Старейшина → полная панель управления
-  👤 Участник → отказ
+  ✪ Лидер, ✧ Старейшина, ✦ Дитя клана → полная панель управления
+  ◇ Участник → отказ
 """
 import datetime
 import logging
@@ -30,10 +30,10 @@ _WIP     = "🚧 Раздел находится в разработке."
 _VERSION = "v1.0.0"
 
 _ROLE_ICONS = {
-    UserRole.LEADER:     "👑",
-    UserRole.CLAN_CHILD: "⭐",
-    UserRole.ELDER:      "🛡️",
-    UserRole.MEMBER:     "👤",
+    UserRole.LEADER:     "✪",
+    UserRole.ELDER:      "✧",
+    UserRole.CLAN_CHILD: "✦",
+    UserRole.MEMBER:     "◇",
 }
 
 

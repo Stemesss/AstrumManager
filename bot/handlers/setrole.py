@@ -11,7 +11,7 @@ from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
 from bot.services.user_service import UserService
 from bot.utils.roles import assignable_roles, can_assign, role_label
-from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
+from bot.utils.sync_title import ADMIN_TITLES, build_admin_title, sync_admin_title
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -106,8 +106,9 @@ async def handle_setrole(
     )
 
     # Журнал аудита
-    actor_nick  = await user_service.get_game_nick(actor_id) or str(actor_id)
-    target_nick = await user_service.get_game_nick(target_id) or str(target_id)
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+    target_game_nick = await user_service.get_game_nick(target_id)
+    target_nick = target_game_nick or str(target_id)
 
     await audit_service.log(
         user_id=actor_id,
@@ -121,12 +122,17 @@ async def handle_setrole(
     )
 
     # Синхронизация Telegram Admin Title
-    tg_error = await sync_admin_title(bot, group_chat_id, target_id, confirmed)
+    tg_error = await sync_admin_title(
+        bot, group_chat_id, target_id, confirmed, game_nick=target_game_nick
+    )
 
     if tg_error:
         tg_note = f"\n\n{tg_error}"
     elif confirmed in ADMIN_TITLES:
-        tg_note = f"\n\n✅ Telegram-титул установлен: «{ADMIN_TITLES[confirmed]}»"
+        tg_note = (
+            f"\n\n✅ Telegram-титул установлен: "
+            f"«{build_admin_title(confirmed, target_game_nick)}»"
+        )
     else:
         tg_note = "\n\n✅ Telegram-титул снят (роль Участник)."
 

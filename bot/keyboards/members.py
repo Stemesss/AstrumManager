@@ -9,8 +9,8 @@ PAGE_SIZE = 10
 
 _ICONS: dict[UserRole, str] = {
     UserRole.LEADER:     "✪",
-    UserRole.CLAN_CHILD: "✦",
     UserRole.ELDER:      "✧",
+    UserRole.CLAN_CHILD: "✦",
     UserRole.MEMBER:     "◇",
 }
 

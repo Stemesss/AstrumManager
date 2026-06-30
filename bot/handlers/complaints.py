@@ -42,7 +42,7 @@ from bot.utils.roles import role_label
 router = Router()
 logger = logging.getLogger(__name__)
 
-_MANAGER_ROLES = {UserRole.LEADER, UserRole.CLAN_CHILD, UserRole.ELDER}
+_MANAGER_ROLES = UserRole.admin_roles()
 
 _MAX_TITLE   = 100
 _MAX_CONTENT = 2000
@@ -391,5 +391,4 @@ async def cb_delete(
         f"💡 <b>Все обращения</b>\n\nВсего: {total}" if total else "💡 <b>Все обращения</b>\n\nОбращений нет.",
         reply_markup=complaints_list_kb(page_rows, 0, total, "list"),
     )
-
 

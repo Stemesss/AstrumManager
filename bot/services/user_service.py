@@ -65,7 +65,7 @@ class UserService:
         return UserRole.from_str(role_str)
 
     async def is_admin(self, telegram_id: int) -> bool:
-        """True если пользователь имеет административную роль (Лидер, Дитя клана или Старейшина)."""
+        """True если пользователь имеет административную роль (Лидер, Старейшина или Дитя клана)."""
         role = await self.get_role(telegram_id)
         return role in UserRole.admin_roles()
 

@@ -3,8 +3,8 @@
 Обработчик раздела «📰 Новости».
 
 Права доступа:
-  👑 Лидер, ⭐ Дитя клана, 🛡️ Старейшина → просмотр + управление
-  👤 Участник → только просмотр
+  ✪ Лидер, ✧ Старейшина, ✦ Дитя клана → просмотр + управление
+  ◇ Участник → только просмотр
 """
 import logging
 
@@ -34,7 +34,7 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 # Роли, которым разрешено управлять новостями
-NEWS_MANAGER_ROLES = {UserRole.LEADER, UserRole.CLAN_CHILD, UserRole.ELDER}
+NEWS_MANAGER_ROLES = UserRole.admin_roles()
 
 _MAX_TITLE_LEN = 100
 _MAX_CONTENT_LEN = 4000
@@ -441,5 +441,4 @@ async def cb_pin(
         _news_card(item),
         reply_markup=news_view_kb(item.id, item.pinned, is_manager),
     )
-
 

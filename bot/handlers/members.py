@@ -2,7 +2,7 @@
 """
 Обработчик раздела «👥 Участники».
 
-Доступ: Лидер, Дитя клана, Старейшина.
+Доступ: Лидер, Старейшина, Дитя клана.
 
 Маршруты callback_data:
   admin:members / admin:roles  → меню раздела участников
@@ -57,8 +57,8 @@ logger = logging.getLogger(__name__)
 
 _ICONS: dict[UserRole, str] = {
     UserRole.LEADER:     "✪",
-    UserRole.CLAN_CHILD: "✦",
     UserRole.ELDER:      "✧",
+    UserRole.CLAN_CHILD: "✦",
     UserRole.MEMBER:     "◇",
 }
 
@@ -285,8 +285,9 @@ async def cb_mem_set(
     await user_service.set_role(target_id, new_role)
     confirmed = await user_service.get_role(target_id)
 
-    actor_nick  = await user_service.get_game_nick(actor_id) or str(actor_id)
-    target_nick = await user_service.get_game_nick(target_id) or str(target_id)
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+    target_game_nick = await user_service.get_game_nick(target_id)
+    target_nick = target_game_nick or str(target_id)
 
     await audit_service.log(
         user_id=actor_id,
@@ -305,14 +306,14 @@ async def cb_mem_set(
     )
 
     tg_error = await sync_admin_title(
-        bot, group_chat_id, target_id, confirmed, game_nick=target_nick
+        bot, group_chat_id, target_id, confirmed, game_nick=target_game_nick
     )
 
     icon = _ICONS.get(confirmed, "◇")
     if tg_error:
         tg_note = f"\n\n{tg_error}"
     elif confirmed in ADMIN_TITLES:
-        actual_title = build_admin_title(confirmed, target_nick)
+        actual_title = build_admin_title(confirmed, target_game_nick)
         tg_note = f"\n\n✅ Telegram-титул установлен: «{actual_title}»"
     else:
         tg_note = "\n\n✅ Telegram-титул снят."
@@ -602,9 +603,8 @@ async def cb_mem_season_ok(
     actor_id = callback.from_user.id
     actor_role = await user_service.get_role(actor_id)
 
-    # Только Лидер или суперпользователь могут запускать новый сезон
-    if actor_role != UserRole.LEADER and actor_id != _SUPERUSER_ID:
-        await callback.answer("⛔ Только Лидер клана может запустить новый сезон.", show_alert=True)
+    if actor_role not in UserRole.admin_roles() and actor_id != _SUPERUSER_ID:
+        await callback.answer("⛔ Только администрация клана может запустить новый сезон.", show_alert=True)
         return
 
     await callback.answer("⏳ Выполняется сброс сезона...")

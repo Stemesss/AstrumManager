@@ -34,7 +34,7 @@ from bot.utils.roles import role_label
 router = Router()
 logger = logging.getLogger(__name__)
 
-_MANAGER_ROLES = {UserRole.LEADER, UserRole.CLAN_CHILD, UserRole.ELDER}
+_MANAGER_ROLES = UserRole.admin_roles()
 _MAX_CONTENT   = 4000
 
 
@@ -233,5 +233,4 @@ async def cb_pin(
         await callback.answer("📌 Правила опубликованы и закреплены в теме!")
     else:
         await callback.answer("⚠️ Не удалось опубликовать в тему. Проверьте настройки.", show_alert=True)
-
 

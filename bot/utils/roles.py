@@ -2,27 +2,27 @@
 """Утилиты для работы с ролями пользователей."""
 from bot.models.user import UserRole
 
-# Иконки в порядке иерархии: Лидер → Дитя клана → Старейшина → Участник
+# Иконки в порядке иерархии: Лидер → Старейшина → Дитя клана → Участник
 _ROLE_ICONS: dict[UserRole, str] = {
-    UserRole.LEADER: "👑",
-    UserRole.CLAN_CHILD: "⭐",
-    UserRole.ELDER: "🛡️",
-    UserRole.MEMBER: "👤",
+    UserRole.LEADER: "✪",
+    UserRole.ELDER: "✧",
+    UserRole.CLAN_CHILD: "✦",
+    UserRole.MEMBER: "◇",
 }
 
 # Иконки для Telegram Admin Title (отображаются в профиле и в группе)
 ROLE_DISPLAY_ICONS: dict[UserRole, str] = {
     UserRole.LEADER:     "✪",
-    UserRole.CLAN_CHILD: "✦",
     UserRole.ELDER:      "✧",
+    UserRole.CLAN_CHILD: "✦",
     UserRole.MEMBER:     "◇",
 }
 
 # Порядок ролей по убыванию старшинства
 ROLE_ORDER: list[UserRole] = [
     UserRole.LEADER,
-    UserRole.CLAN_CHILD,
     UserRole.ELDER,
+    UserRole.CLAN_CHILD,
     UserRole.MEMBER,
 ]
 
@@ -30,9 +30,9 @@ ROLE_ORDER: list[UserRole] = [
 # Матрица прав: кто какие роли может назначать
 # Ключ — роль того, кто назначает; значение — множество ролей, которые он может назначить.
 ROLE_CAN_ASSIGN: dict[UserRole, frozenset[UserRole]] = {
-    UserRole.LEADER:     frozenset({UserRole.LEADER, UserRole.CLAN_CHILD, UserRole.ELDER, UserRole.MEMBER}),
-    UserRole.CLAN_CHILD: frozenset({UserRole.ELDER, UserRole.MEMBER}),
-    UserRole.ELDER:      frozenset({UserRole.MEMBER}),
+    UserRole.LEADER:     frozenset(UserRole),
+    UserRole.ELDER:      frozenset(UserRole),
+    UserRole.CLAN_CHILD: frozenset(UserRole),
     UserRole.MEMBER:     frozenset(),
 }
 
