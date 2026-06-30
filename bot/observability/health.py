@@ -63,6 +63,9 @@ class HealthService:
 
 def _join_path(prefix: str, suffix: str) -> str:
     prefix = prefix.strip().rstrip("/")
+    suffix = suffix.strip()
+    if not suffix or suffix == "/":
+        return prefix or "/"
     suffix = suffix if suffix.startswith("/") else f"/{suffix}"
     if not prefix:
         return suffix

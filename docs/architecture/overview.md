@@ -35,7 +35,7 @@
    - `run_webhook(...)`, если найден публичный хост;
    - `run_polling(...)`, если публичный хост отсутствует.
 
-Webhook path по умолчанию равен `/api/telegram/webhook`, но может быть переопределён через `WEBHOOK_PATH`.
+Webhook path централизован в `config.runtime.webhook_path`: по умолчанию это `/api/telegram/webhook`, но значение можно переопределить через `WEBHOOK_PATH`.
 
 ### 2.2 Node.js proxy
 
@@ -52,7 +52,7 @@ Express-приложение:
 
 ### 3.1 Webhook mode
 
-Выбирается, если `bot/config/settings.py::_resolve_public_host()` нашёл один из источников:
+Выбирается, если в `config.runtime.public_host` найден публичный хост, собранный из одного из источников:
 
 1. `WEBHOOK_BASE_URL`
 2. `REPLIT_DOMAINS`

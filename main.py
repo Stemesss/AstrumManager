@@ -78,7 +78,7 @@ async def on_shutdown(bot: Bot, db: Database, **_kwargs) -> None:
 
 
 async def on_startup_polling(
-    bot: Bot, db: Database, dp: Dispatcher, observability_server: ObservabilityServer | None = None, **_kwargs
+    bot: Bot, db: Database, dp: Dispatcher, observability_server: ObservabilityServer | None = None
 ) -> None:
     import datetime
     dp["bot_start_time"] = datetime.datetime.now(datetime.timezone.utc)
@@ -101,7 +101,6 @@ async def on_shutdown_polling(
     db: Database,
     observability_server: ObservabilityServer | None = None,
     metrics: MetricsRegistry | None = None,
-    **_kwargs,
 ) -> None:
     if observability_server:
         await observability_server.stop()
