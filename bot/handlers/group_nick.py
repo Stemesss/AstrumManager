@@ -46,11 +46,10 @@ import re
 from aiogram import Bot, F, Router
 from aiogram.types import Message
 
-from bot.models.audit import AuditAction
-from bot.services.audit_service import AuditService
+from bot.services.member_policy import MemberPolicy
+from bot.services.nickname_service import NicknameService
 from bot.services.user_service import UserService
 from bot.utils.nick_format import build_full_nick, validate_name
-from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
 
 router = Router()
 router.message.filter(F.chat.type.in_({"group", "supergroup"}))
@@ -73,9 +72,9 @@ _ASSIGN_CMD_RE = re.compile(r"^[!/]назначить\s+ник\s+(.+)$", re.IGNO
 _ADMIN_BADGE = "🔰"   # значок в ответе при назначении ником другому
 
 
-async def _is_group_admin(user_id: int, user_service: UserService) -> bool:
+async def _is_group_admin(user_id: int, member_policy: MemberPolicy) -> bool:
     """True если пользователь является администратором клана в системе бота."""
-    return await user_service.is_admin(user_id)
+    return await member_policy.can_use_admin_functions(user_id)
 
 
 async def _set_nick(
@@ -85,46 +84,30 @@ async def _set_nick(
     target_name_tg: str,
     new_name: str,
     actor_id: int,
-    user_service: UserService,
-    audit_service: AuditService,
+    nickname_service: NicknameService,
     group_chat_id: int,
     *,
     is_self: bool,
+    telegram_user=None,
 ) -> None:
     """Общая логика сохранения нового ника + синхронизация Telegram-титула."""
-    old_name = await user_service.get_game_nick(target_id) or "?"
-    role = await user_service.get_role(target_id)
-    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
-
-    await user_service.set_game_nick(target_id, new_name)
-
-    new_full = build_full_nick(new_name, role)
-    old_full  = build_full_nick(old_name, role) if old_name != "?" else old_name
-
-    await audit_service.log(
-        user_id=actor_id,
-        game_nick=actor_nick,
-        role=await user_service.get_role(actor_id),
-        action_type=AuditAction.MEMBER_NICK_CHANGE,
-        description=(
-            f"{old_full} → {new_full}"
-            if is_self
-            else f"Администратор назначил ник: {old_full} → {new_full}"
-        ),
+    result = await nickname_service.change_nickname(
+        actor_id=actor_id,
+        target_id=target_id,
+        raw_nick=new_name,
+        bot=bot,
+        group_chat_id=group_chat_id,
+        telegram_user=telegram_user,
     )
+    if not result["ok"]:
+        await message.reply(result["error"])
+        return
 
-    logger.info(
-        "Ник изменён в группе: target=%s %r → %r (actor=%s)",
-        target_id, old_name, new_name, actor_id,
-    )
-
-    # Обновить Telegram Admin Title для администраторов
-    tg_error = None
-    if role in ADMIN_TITLES:
-        tg_error = await sync_admin_title(
-            bot, group_chat_id, target_id, role, game_nick=new_name
-        )
-
+    role = result["role"]
+    old_name = result["old_nick"] or "?"
+    new_full = result["full_nick"]
+    old_full = build_full_nick(old_name, role) if old_name != "?" else old_name
+    tg_error = result["tg_error"]
     mention = f'<a href="tg://user?id={target_id}">{target_name_tg}</a>'
     tg_note = f"\n<i>Telegram-титул: {old_full} → {new_full}</i>" if not tg_error else ""
 
@@ -150,36 +133,21 @@ async def _delete_nick(
     target_id: int,
     target_name_tg: str,
     actor_id: int,
-    user_service: UserService,
-    audit_service: AuditService,
+    nickname_service: NicknameService,
     group_chat_id: int,
 ) -> None:
     """Удаляет ник участника (только для администраторов)."""
-    old_name = await user_service.get_game_nick(target_id)
-    role = await user_service.get_role(target_id)
-    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
-
-    if not old_name:
-        await message.reply("⚠️ У этого участника ник не задан.")
+    result = await nickname_service.clear_nickname(
+        actor_id=actor_id,
+        target_id=target_id,
+        bot=bot,
+        group_chat_id=group_chat_id,
+    )
+    if not result["ok"]:
+        await message.reply(result["error"])
         return
 
-    old_full = build_full_nick(old_name, role)
-
-    await user_service.set_game_nick(target_id, "")
-
-    await audit_service.log(
-        user_id=actor_id,
-        game_nick=actor_nick,
-        role=await user_service.get_role(actor_id),
-        action_type=AuditAction.MEMBER_NICK_CHANGE,
-        description=f"Администратор удалил ник: {old_full}",
-    )
-
-    logger.info(
-        "Ник удалён в группе: target=%s ник=%r (actor=%s)",
-        target_id, old_name, actor_id,
-    )
-
+    old_full = result["old_full_nick"]
     mention = f'<a href="tg://user?id={target_id}">{target_name_tg}</a>'
     await message.reply(
         f"🗑 Ник удалён.\n\n"
@@ -195,8 +163,8 @@ async def _delete_nick(
 async def _handle_nick_assign(
     message: Message,
     raw_name: str,
-    user_service: UserService,
-    audit_service: AuditService,
+    member_policy: MemberPolicy,
+    nickname_service: NicknameService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
@@ -215,7 +183,7 @@ async def _handle_nick_assign(
     if message.reply_to_message and message.reply_to_message.from_user:
         target_user = message.reply_to_message.from_user
         # Назначать чужой ник — только администраторам
-        if target_user.id != actor_id and not await _is_group_admin(actor_id, user_service):
+        if target_user.id != actor_id and not await _is_group_admin(actor_id, member_policy):
             await message.reply(
                 "⛔ Назначать ник другим участникам могут только администраторы."
             )
@@ -229,35 +197,24 @@ async def _handle_nick_assign(
         await message.reply("⚠️ Нельзя назначить игровой ник боту.")
         return
 
-    # Гарантируем, что цель есть в БД — иначе set_game_nick (UPDATE) не сохранит ник
-    await user_service.get_or_create(target_user)
-
-    # Уникальность ника в клане (как у Iris: нет повторяющихся ников)
-    if await user_service.is_nick_taken(name, exclude_id=target_user.id):
-        await message.reply(
-            f"❌ Ник «{name}» уже занят другим участником клана.\n"
-            "Выберите другой ник."
-        )
-        return
-
     await _set_nick(
         bot, message,
         target_id=target_user.id,
         target_name_tg=target_user.full_name,
         new_name=name,
         actor_id=actor_id,
-        user_service=user_service,
-        audit_service=audit_service,
+        nickname_service=nickname_service,
         group_chat_id=group_chat_id,
         is_self=is_self,
+        telegram_user=target_user,
     )
 
 
 @router.message(F.text.regexp(r"^\+\S.+"))
 async def handle_short_nick(
     message: Message,
-    user_service: UserService,
-    audit_service: AuditService,
+    member_policy: MemberPolicy,
+    nickname_service: NicknameService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
@@ -271,15 +228,15 @@ async def handle_short_nick(
 
     raw_name = m.group(1).strip()
     await _handle_nick_assign(
-        message, raw_name, user_service, audit_service, bot, group_chat_id
+        message, raw_name, member_policy, nickname_service, bot, group_chat_id
     )
 
 
 @router.message(F.text.regexp(r"(?i)^[!/]ник\s+\S"))
 async def handle_nick_cmd(
     message: Message,
-    user_service: UserService,
-    audit_service: AuditService,
+    member_policy: MemberPolicy,
+    nickname_service: NicknameService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
@@ -291,15 +248,15 @@ async def handle_nick_cmd(
         return
     raw_name = m.group(1).strip()
     await _handle_nick_assign(
-        message, raw_name, user_service, audit_service, bot, group_chat_id
+        message, raw_name, member_policy, nickname_service, bot, group_chat_id
     )
 
 
 @router.message(F.text.regexp(r"(?i)^[!/]назначить\s+ник\s+\S"))
 async def handle_assign_nick_cmd(
     message: Message,
-    user_service: UserService,
-    audit_service: AuditService,
+    member_policy: MemberPolicy,
+    nickname_service: NicknameService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
@@ -317,15 +274,15 @@ async def handle_assign_nick_cmd(
         return
     raw_name = m.group(1).strip()
     await _handle_nick_assign(
-        message, raw_name, user_service, audit_service, bot, group_chat_id
+        message, raw_name, member_policy, nickname_service, bot, group_chat_id
     )
 
 
 @router.message(F.text.regexp(r"(?i)^[!/]удалить\s+ник$"))
 async def handle_delete_nick_cmd(
     message: Message,
-    user_service: UserService,
-    audit_service: AuditService,
+    member_policy: MemberPolicy,
+    nickname_service: NicknameService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
@@ -333,7 +290,7 @@ async def handle_delete_nick_cmd(
     if not message.from_user:
         return
 
-    if not await _is_group_admin(message.from_user.id, user_service):
+    if not await _is_group_admin(message.from_user.id, member_policy):
         await message.reply("⛔ Удалять ники могут только администраторы.")
         return
 
@@ -350,8 +307,7 @@ async def handle_delete_nick_cmd(
         target_id=target.id,
         target_name_tg=target.full_name,
         actor_id=message.from_user.id,
-        user_service=user_service,
-        audit_service=audit_service,
+        nickname_service=nickname_service,
         group_chat_id=group_chat_id,
     )
 
@@ -359,8 +315,7 @@ async def handle_delete_nick_cmd(
 @router.message(F.text.regexp(r"^-ник$") | F.text.regexp(r"(?i)^[!/]удалить\s+свой\s+ник$"))
 async def handle_remove_own_nick(
     message: Message,
-    user_service: UserService,
-    audit_service: AuditService,
+    nickname_service: NicknameService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
@@ -372,8 +327,7 @@ async def handle_remove_own_nick(
         target_id=message.from_user.id,
         target_name_tg=message.from_user.full_name,
         actor_id=message.from_user.id,
-        user_service=user_service,
-        audit_service=audit_service,
+        nickname_service=nickname_service,
         group_chat_id=group_chat_id,
     )
 

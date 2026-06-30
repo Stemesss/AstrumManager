@@ -151,11 +151,55 @@ async def _add_topics_icon_custom_emoji_id(conn: aiosqlite.Connection) -> None:
     )
 
 
+async def _protect_users_game_nick_uniqueness(conn: aiosqlite.Connection) -> None:
+    await conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS users_game_nick_unique_insert
+        BEFORE INSERT ON users
+        FOR EACH ROW
+        WHEN trim(COALESCE(NEW.game_nick, '')) != ''
+         AND EXISTS (
+             SELECT 1
+             FROM users
+             WHERE lower(trim(game_nick)) = lower(trim(NEW.game_nick))
+         )
+        BEGIN
+            SELECT RAISE(ABORT, 'duplicate_game_nick');
+        END;
+        """
+    )
+    await conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS users_game_nick_unique_update
+        BEFORE UPDATE OF game_nick ON users
+        FOR EACH ROW
+        WHEN trim(COALESCE(NEW.game_nick, '')) != ''
+         AND EXISTS (
+             SELECT 1
+             FROM users
+             WHERE telegram_id != NEW.telegram_id
+               AND lower(trim(game_nick)) = lower(trim(NEW.game_nick))
+         )
+        BEGIN
+            SELECT RAISE(ABORT, 'duplicate_game_nick');
+        END;
+        """
+    )
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_users_game_nick_lookup
+        ON users(lower(trim(game_nick)))
+        WHERE trim(COALESCE(game_nick, '')) != ''
+        """
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "create_base_schema", _create_base_schema),
     Migration(2, "add_users_game_nick", _add_users_game_nick),
     Migration(3, "add_news_content_type", _add_news_content_type),
     Migration(4, "add_topics_icon_custom_emoji_id", _add_topics_icon_custom_emoji_id),
+    Migration(5, "protect_users_game_nick_uniqueness", _protect_users_game_nick_uniqueness),
 )
 
 

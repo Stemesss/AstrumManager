@@ -6,19 +6,14 @@ from aiogram import Bot, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from bot.models.audit import AuditAction
 from bot.models.user import UserRole
-from bot.services.audit_service import AuditService
+from bot.services.member_policy import MemberPolicy
+from bot.services.role_service import RoleService
 from bot.services.user_service import UserService
-from bot.utils.roles import assignable_roles, can_assign, role_label
-from bot.utils.sync_title import ADMIN_TITLES, build_admin_title, sync_admin_title
+from bot.utils.roles import assignable_roles, role_label
 
 router = Router()
 logger = logging.getLogger(__name__)
-
-# Суперпользователь — полный доступ независимо от роли в БД
-_SUPERUSER_ID = 8490615925
-
 
 def _usage_for(actor_role: UserRole) -> str:
     """Возвращает подсказку /setrole с ролями, доступными данному актору."""
@@ -36,22 +31,17 @@ async def handle_setrole(
     message: Message,
     bot: Bot,
     user_service: UserService,
-    audit_service: AuditService,
-    owner_id: int | None,
+    member_policy: MemberPolicy,
+    role_service: RoleService,
     group_chat_id: int,
 ) -> None:
     """Назначает роль пользователю с проверкой иерархии прав."""
     if not message.from_user:
         return
 
-    actor_id   = message.from_user.id
-    is_superuser = actor_id == _SUPERUSER_ID or (owner_id is not None and actor_id == owner_id)
-
-    # Получаем роль актора
+    actor_id = message.from_user.id
     actor_role = await user_service.get_role(actor_id)
-
-    # Суперпользователь и владелец бота всегда получают права Лидера
-    effective_role = UserRole.LEADER if is_superuser else actor_role
+    effective_role = await member_policy.get_effective_role(actor_id)
 
     # Проверка: есть ли у актора право назначать хоть кому-то что-то
     if not assignable_roles(effective_role):
@@ -87,51 +77,32 @@ async def handle_setrole(
         return
 
     # Проверка иерархии прав
-    if not can_assign(effective_role, role):
-        await message.answer(
-            f"⛔ Недостаточно прав для назначения роли {role_label(role)}.\n\n"
-            f"{_usage_for(effective_role)}"
-        )
+    result = await role_service.assign_role(
+        actor_id=actor_id,
+        target_id=target_id,
+        new_role=role,
+        bot=bot,
+        group_chat_id=group_chat_id,
+    )
+    if not result["ok"]:
+        await message.answer(f"{result['error']}\n\n{_usage_for(effective_role)}")
         return
 
-    # Сохранение в БД
-    await user_service.set_role(target_id, role)
-
-    # Читаем обратно из БД — показываем именно то, что теперь хранится
-    confirmed = await user_service.get_role(target_id)
+    confirmed = result["role"]
+    tg_error = result["tg_error"]
+    tg_title = result["tg_title"]
 
     logger.info(
         "%s (роль: %s) назначил роль %r пользователю %s (подтверждено: %r)",
         actor_id, effective_role.value, role.value, target_id, confirmed.value,
     )
 
-    # Журнал аудита
-    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
-    target_game_nick = await user_service.get_game_nick(target_id)
-    target_nick = target_game_nick or str(target_id)
-
-    await audit_service.log(
-        user_id=actor_id,
-        game_nick=actor_nick,
-        role=actor_role,
-        action_type=AuditAction.MEMBER_ROLE_SET,
-        description=(
-            f"{role_label(actor_role)} {actor_nick} назначил роль "
-            f"{role_label(confirmed)} пользователю {target_nick}"
-        ),
-    )
-
-    # Синхронизация Telegram Admin Title
-    tg_error = await sync_admin_title(
-        bot, group_chat_id, target_id, confirmed, game_nick=target_game_nick
-    )
-
     if tg_error:
         tg_note = f"\n\n{tg_error}"
-    elif confirmed in ADMIN_TITLES:
+    elif tg_title:
         tg_note = (
             f"\n\n✅ Telegram-титул установлен: "
-            f"«{build_admin_title(confirmed, target_game_nick)}»"
+            f"«{tg_title}»"
         )
     else:
         tg_note = "\n\n✅ Telegram-титул снят (роль Участник)."

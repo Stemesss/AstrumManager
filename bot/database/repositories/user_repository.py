@@ -6,10 +6,74 @@ from bot.database.repositories.base import BaseRepository
 
 
 class UserRepository(BaseRepository):
+    async def get_by_id(self, user_id: int):
+        return await self.get_by_telegram_id(user_id)
+
     async def get_by_telegram_id(self, telegram_id: int):
         return await self.fetchone(
             "SELECT * FROM users WHERE telegram_id = ?",
             (telegram_id,),
+        )
+
+    async def get_by_username(self, username: str):
+        normalized = username.lstrip("@").strip()
+        if not normalized:
+            return None
+        return await self.fetchone(
+            "SELECT * FROM users WHERE lower(username) = lower(?)",
+            (normalized,),
+        )
+
+    async def get_by_nickname(
+        self,
+        nickname: str,
+        *,
+        exclude_telegram_id: int | None = None,
+    ):
+        normalized = nickname.strip()
+        if not normalized:
+            return None
+        sql = (
+            "SELECT * FROM users "
+            "WHERE trim(COALESCE(game_nick, '')) != '' "
+            "AND lower(trim(game_nick)) = lower(trim(?))"
+        )
+        params: tuple = (normalized,)
+        if exclude_telegram_id is not None:
+            sql += " AND telegram_id != ?"
+            params = (normalized, exclude_telegram_id)
+        return await self.fetchone(sql, params)
+
+    async def search_users(self, query: str, limit: int = 50):
+        normalized = query.strip()
+        if not normalized:
+            return []
+        like = f"%{normalized.lower()}%"
+        if normalized.isdigit():
+            return await self.fetchall(
+                """
+                SELECT *
+                FROM users
+                WHERE telegram_id = ?
+                   OR lower(COALESCE(username, '')) LIKE ?
+                   OR lower(first_name) LIKE ?
+                   OR lower(COALESCE(game_nick, '')) LIKE ?
+                ORDER BY role ASC, last_seen DESC
+                LIMIT ?
+                """,
+                (int(normalized), like, like, like, limit),
+            )
+        return await self.fetchall(
+            """
+            SELECT *
+            FROM users
+            WHERE lower(COALESCE(username, '')) LIKE ?
+               OR lower(first_name) LIKE ?
+               OR lower(COALESCE(game_nick, '')) LIKE ?
+            ORDER BY role ASC, last_seen DESC
+            LIMIT ?
+            """,
+            (like, like, like, limit),
         )
 
     async def upsert(self, telegram_id: int, username: str | None, first_name: str) -> None:

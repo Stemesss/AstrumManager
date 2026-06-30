@@ -17,7 +17,11 @@ from bot.middlewares.logging import LoggingMiddleware
 from bot.middlewares.nick_gate import NickGateMiddleware
 from bot.observability import HealthService, MetricsRegistry, ObservabilityServer, register_observability_routes
 from bot.services.audit_service import AuditService
+from bot.services.member_policy import MemberPolicy
+from bot.services.membership_service import MembershipService
 from bot.services.news_service import NewsService
+from bot.services.nickname_service import NicknameService
+from bot.services.role_service import RoleService
 from bot.services.stats_service import StatsService
 from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
@@ -120,15 +124,32 @@ def build_dispatcher(
     dp = Dispatcher()
 
     # ── Внедрение зависимостей ────────────────────────────────────────────
-    user_service  = UserService(db)
-    news_service  = NewsService(db)
     audit_service = AuditService(db)
     stats_service = StatsService(db)
+    policy_service = MemberPolicy(db, owner_id=owner_id)
+    role_service = RoleService(db, audit_service, policy_service)
+    nickname_service = NicknameService(db, audit_service, policy_service)
+    membership_service = MembershipService(db, stats_service, policy_service)
+    user_service  = UserService(
+        db,
+        owner_id=owner_id,
+        stats_service=stats_service,
+        audit_service=audit_service,
+        policy=policy_service,
+        role_service=role_service,
+        nickname_service=nickname_service,
+        membership_service=membership_service,
+    )
+    news_service  = NewsService(db)
     topic_service = TopicService(db, chat_id=group_chat_id or -1004463841801)
     dp["user_service"]  = user_service
     dp["news_service"]  = news_service
     dp["audit_service"] = audit_service
     dp["stats_service"] = stats_service
+    dp["member_policy"] = policy_service
+    dp["role_service"] = role_service
+    dp["nickname_service"] = nickname_service
+    dp["membership_service"] = membership_service
     dp["topic_service"]  = topic_service
     dp["group_chat_id"]  = group_chat_id or -1004463841801
     dp["db"]             = db

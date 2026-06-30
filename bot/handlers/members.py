@@ -25,7 +25,6 @@ import datetime
 import logging
 
 from aiogram import Bot, F, Router
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -46,11 +45,13 @@ from bot.keyboards.nav import CANCEL_KB
 from bot.models.audit import AuditAction
 from bot.models.user import User, UserRole
 from bot.services.audit_service import AuditService
+from bot.services.member_policy import MemberPolicy
+from bot.services.membership_service import MembershipService
+from bot.services.role_service import RoleService
 from bot.services.stats_service import StatsService
 from bot.services.user_service import UserService
 from bot.states.members import MemberDelete
-from bot.utils.roles import ROLE_ORDER, assignable_roles, can_assign, role_label
-from bot.utils.sync_title import ADMIN_TITLES, build_admin_title, sync_admin_title
+from bot.utils.roles import ROLE_ORDER, role_label
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -61,8 +62,6 @@ _ICONS: dict[UserRole, str] = {
     UserRole.CLAN_CHILD: "✦",
     UserRole.MEMBER:     "◇",
 }
-
-_SUPERUSER_ID = 8490615925
 
 _MENU_TEXT = (
     "👥 <b>Управление участниками</b>\n\n"
@@ -86,10 +85,6 @@ def _display_name(u: User) -> str:
     return u.game_nick or u.first_name
 
 
-def _effective_role(actor_id: int, actor_role: UserRole) -> UserRole:
-    return UserRole.LEADER if actor_id == _SUPERUSER_ID else actor_role
-
-
 def _card_text(u: User) -> str:
     icon = _ICONS.get(u.role, "◇")
     username_line = f"@{u.username}" if u.username else "(без юзернейма)"
@@ -101,19 +96,15 @@ def _card_text(u: User) -> str:
     )
 
 
-async def _check_admin(cb: CallbackQuery, user_service: UserService) -> bool:
-    role = await user_service.get_role(cb.from_user.id)
-    if role not in UserRole.admin_roles():
+async def _check_admin(cb: CallbackQuery, member_policy: MemberPolicy) -> bool:
+    if not await member_policy.can_view_admin_sections(cb.from_user.id):
         await cb.answer("🔒 Недостаточно прав.", show_alert=True)
         return False
     return True
 
 
-async def _find_user(user_service: UserService, user_id: int) -> User | None:
-    for u in await user_service.get_all_users():
-        if u.telegram_id == user_id:
-            return u
-    return None
+async def _find_user(membership_service: MembershipService, user_id: int) -> User | None:
+    return await membership_service.get_user_by_id(user_id)
 
 
 async def _show_menu(cb: CallbackQuery) -> None:
@@ -158,24 +149,24 @@ async def _show_delete_list(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == AdminBtn.MEMBERS)
-async def cb_admin_members(callback: CallbackQuery, user_service: UserService) -> None:
-    if not await _check_admin(callback, user_service):
+async def cb_admin_members(callback: CallbackQuery, member_policy: MemberPolicy) -> None:
+    if not await _check_admin(callback, member_policy):
         return
     await callback.answer()
     await _show_menu(callback)
 
 
 @router.callback_query(F.data == AdminBtn.ROLES)
-async def cb_admin_roles(callback: CallbackQuery, user_service: UserService) -> None:
-    if not await _check_admin(callback, user_service):
+async def cb_admin_roles(callback: CallbackQuery, member_policy: MemberPolicy) -> None:
+    if not await _check_admin(callback, member_policy):
         return
     await callback.answer()
     await _show_menu(callback)
 
 
 @router.callback_query(F.data == MemberBtn.MENU)
-async def cb_mem_menu(callback: CallbackQuery, user_service: UserService) -> None:
-    if not await _check_admin(callback, user_service):
+async def cb_mem_menu(callback: CallbackQuery, member_policy: MemberPolicy) -> None:
+    if not await _check_admin(callback, member_policy):
         return
     await callback.answer()
     await _show_menu(callback)
@@ -186,8 +177,8 @@ async def cb_mem_menu(callback: CallbackQuery, user_service: UserService) -> Non
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("mem:list:"))
-async def cb_mem_list(callback: CallbackQuery, user_service: UserService) -> None:
-    if not await _check_admin(callback, user_service):
+async def cb_mem_list(callback: CallbackQuery, user_service: UserService, member_policy: MemberPolicy) -> None:
+    if not await _check_admin(callback, member_policy):
         return
     page = int(callback.data.split(":")[2])
     await callback.answer()
@@ -213,11 +204,15 @@ async def cb_mem_close(callback: CallbackQuery) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("mem:card:"))
-async def cb_mem_card(callback: CallbackQuery, user_service: UserService) -> None:
-    if not await _check_admin(callback, user_service):
+async def cb_mem_card(
+    callback: CallbackQuery,
+    member_policy: MemberPolicy,
+    membership_service: MembershipService,
+) -> None:
+    if not await _check_admin(callback, member_policy):
         return
     user_id = int(callback.data.split(":")[2])
-    u = await _find_user(user_service, user_id)
+    u = await _find_user(membership_service, user_id)
     if not u:
         await callback.answer("Участник не найден.", show_alert=True)
         return
@@ -230,19 +225,22 @@ async def cb_mem_card(callback: CallbackQuery, user_service: UserService) -> Non
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("mem:role:"))
-async def cb_mem_role(callback: CallbackQuery, user_service: UserService) -> None:
-    if not await _check_admin(callback, user_service):
+async def cb_mem_role(
+    callback: CallbackQuery,
+    member_policy: MemberPolicy,
+    membership_service: MembershipService,
+) -> None:
+    if not await _check_admin(callback, member_policy):
         return
     target_id = int(callback.data.split(":")[2])
     actor_id = callback.from_user.id
-    actor_role = await user_service.get_role(actor_id)
-    eff_role = _effective_role(actor_id, actor_role)
+    eff_role = await member_policy.get_effective_role(actor_id)
 
-    if not assignable_roles(eff_role):
+    if not await member_policy.can_manage_roles(actor_id):
         await callback.answer("🔒 Вы не можете изменять роли.", show_alert=True)
         return
 
-    u = await _find_user(user_service, target_id)
+    u = await _find_user(membership_service, target_id)
     if not u:
         await callback.answer("Участник не найден.", show_alert=True)
         return
@@ -261,12 +259,13 @@ async def cb_mem_role(callback: CallbackQuery, user_service: UserService) -> Non
 @router.callback_query(F.data.startswith("mem:set:"))
 async def cb_mem_set(
     callback: CallbackQuery,
-    user_service: UserService,
-    audit_service: AuditService,
+    member_policy: MemberPolicy,
+    membership_service: MembershipService,
+    role_service: RoleService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
-    if not await _check_admin(callback, user_service):
+    if not await _check_admin(callback, member_policy):
         return
 
     parts = callback.data.split(":", 3)
@@ -275,50 +274,36 @@ async def cb_mem_set(
 
     new_role = UserRole.from_str(role_value)
     actor_id = callback.from_user.id
-    actor_role = await user_service.get_role(actor_id)
-    eff_role = _effective_role(actor_id, actor_role)
-
-    if not can_assign(eff_role, new_role):
-        await callback.answer("⛔ Недостаточно прав.", show_alert=True)
+    result = await role_service.assign_role(
+        actor_id=actor_id,
+        target_id=target_id,
+        new_role=new_role,
+        bot=bot,
+        group_chat_id=group_chat_id,
+    )
+    if not result["ok"]:
+        await callback.answer(result["error"], show_alert=True)
         return
 
-    await user_service.set_role(target_id, new_role)
-    confirmed = await user_service.get_role(target_id)
-
-    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
-    target_game_nick = await user_service.get_game_nick(target_id)
-    target_nick = target_game_nick or str(target_id)
-
-    await audit_service.log(
-        user_id=actor_id,
-        game_nick=actor_nick,
-        role=actor_role,
-        action_type=AuditAction.MEMBER_ROLE_SET,
-        description=(
-            f"{role_label(actor_role)} {actor_nick} назначил роль "
-            f"{role_label(confirmed)} участнику {target_nick}"
-        ),
-    )
+    confirmed = result["role"]
+    actor_role = result["actor_role"]
+    tg_error = result["tg_error"]
+    tg_title = result["tg_title"]
 
     logger.info(
         "%s (роль: %s) назначил роль %r участнику %s",
         actor_id, actor_role.value, confirmed.value, target_id,
     )
 
-    tg_error = await sync_admin_title(
-        bot, group_chat_id, target_id, confirmed, game_nick=target_game_nick
-    )
-
     icon = _ICONS.get(confirmed, "◇")
     if tg_error:
         tg_note = f"\n\n{tg_error}"
-    elif confirmed in ADMIN_TITLES:
-        actual_title = build_admin_title(confirmed, target_game_nick)
-        tg_note = f"\n\n✅ Telegram-титул установлен: «{actual_title}»"
+    elif tg_title:
+        tg_note = f"\n\n✅ Telegram-титул установлен: «{tg_title}»"
     else:
         tg_note = "\n\n✅ Telegram-титул снят."
 
-    u = await _find_user(user_service, target_id)
+    u = await _find_user(membership_service, target_id)
     card = f"\n\n{_card_text(u)}" if u else ""
 
     await callback.answer(f"✅ {icon} {confirmed.value}", show_alert=False)
@@ -338,13 +323,15 @@ async def cb_mem_set(
 @router.callback_query(F.data.startswith("mem:stats:"))
 async def cb_mem_stats(
     callback: CallbackQuery,
+    member_policy: MemberPolicy,
     user_service: UserService,
+    membership_service: MembershipService,
     stats_service: StatsService,
 ) -> None:
-    if not await _check_admin(callback, user_service):
+    if not await _check_admin(callback, member_policy):
         return
     target_id = int(callback.data.split(":")[2])
-    u = await _find_user(user_service, target_id)
+    u = await _find_user(membership_service, target_id)
     nick = _display_name(u) if u else str(target_id)
 
     days  = await user_service.get_days_in_clan(target_id)
@@ -381,8 +368,12 @@ async def cb_mem_stats(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("mem:del_list:"))
-async def cb_mem_del_list(callback: CallbackQuery, user_service: UserService) -> None:
-    if not await _check_admin(callback, user_service):
+async def cb_mem_del_list(
+    callback: CallbackQuery,
+    user_service: UserService,
+    member_policy: MemberPolicy,
+) -> None:
+    if not await _check_admin(callback, member_policy):
         return
     page = int(callback.data.split(":")[2])
     await callback.answer()
@@ -395,9 +386,9 @@ async def cb_mem_del_list(callback: CallbackQuery, user_service: UserService) ->
 
 @router.callback_query(F.data == MemberBtn.DEL_SEARCH)
 async def cb_mem_del_search(
-    callback: CallbackQuery, user_service: UserService, state: FSMContext
+    callback: CallbackQuery, member_policy: MemberPolicy, state: FSMContext
 ) -> None:
-    if not await _check_admin(callback, user_service):
+    if not await _check_admin(callback, member_policy):
         return
     await callback.answer()
     await state.set_state(MemberDelete.waiting_search)
@@ -410,7 +401,9 @@ async def cb_mem_del_search(
 
 @router.message(MemberDelete.waiting_search)
 async def handle_mem_search(
-    message: Message, user_service: UserService, state: FSMContext
+    message: Message,
+    membership_service: MembershipService,
+    state: FSMContext,
 ) -> None:
     await state.clear()
     query = (message.text or "").strip()
@@ -418,17 +411,7 @@ async def handle_mem_search(
         await message.answer("Поисковый запрос не может быть пустым.")
         return
 
-    all_users = await user_service.get_all_users()
-    query_lower = query.lower()
-
-    matched: list[User] = []
-    for u in all_users:
-        if query.isdigit() and u.telegram_id == int(query):
-            matched.append(u)
-        elif query_lower in (u.game_nick or "").lower():
-            matched.append(u)
-        elif query_lower in u.first_name.lower():
-            matched.append(u)
+    matched = await membership_service.search_users(query)
 
     if not matched:
         await message.answer(
@@ -451,11 +434,15 @@ async def handle_mem_search(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("mem:del_card:"))
-async def cb_mem_del_card(callback: CallbackQuery, user_service: UserService) -> None:
-    if not await _check_admin(callback, user_service):
+async def cb_mem_del_card(
+    callback: CallbackQuery,
+    member_policy: MemberPolicy,
+    membership_service: MembershipService,
+) -> None:
+    if not await _check_admin(callback, member_policy):
         return
     target_id = int(callback.data.split(":")[2])
-    u = await _find_user(user_service, target_id)
+    u = await _find_user(membership_service, target_id)
     if not u:
         await callback.answer("Участник не найден.", show_alert=True)
         return
@@ -478,21 +465,9 @@ async def cb_mem_del_card(callback: CallbackQuery, user_service: UserService) ->
         "<b>Это действие необратимо.</b>"
     )
 
-    # Проверяем ограничения заранее, чтобы сразу показать причину
-    _SUPERUSER = 8490615925
-    if target_id == _SUPERUSER:
-        text = "⛔ Невозможно удалить суперпользователя."
-        await callback.answer()
-        await callback.message.edit_text(
-            text,
-            reply_markup=delete_card_kb(target_id, name),
-        )
-        return
-    if target_id == actor_id:
-        await callback.answer("Нельзя удалить самого себя.", show_alert=True)
-        return
-    if u.role == UserRole.LEADER:
-        await callback.answer("Невозможно удалить владельца проекта.", show_alert=True)
+    error = await member_policy.validate_member_deletion(actor_id, target_id)
+    if error:
+        await callback.answer(error, show_alert=True)
         return
 
     await callback.answer()
@@ -506,16 +481,17 @@ async def cb_mem_del_card(callback: CallbackQuery, user_service: UserService) ->
 @router.callback_query(F.data.startswith("mem:del_ok:"))
 async def cb_mem_del_ok(
     callback: CallbackQuery,
+    member_policy: MemberPolicy,
     user_service: UserService,
     audit_service: AuditService,
 ) -> None:
-    if not await _check_admin(callback, user_service):
+    if not await _check_admin(callback, member_policy):
         return
 
     target_id = int(callback.data.split(":")[2])
     actor_id = callback.from_user.id
 
-    u = await _find_user(user_service, target_id)
+    u = await user_service.get_user_by_id(target_id)
     target_name = _display_name(u) if u else str(target_id)
 
     result = await user_service.delete_member(actor_id, target_id)
@@ -556,8 +532,12 @@ async def cb_mem_del_ok(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == MemberBtn.SEASON)
-async def cb_mem_season(callback: CallbackQuery, user_service: UserService) -> None:
-    if not await _check_admin(callback, user_service):
+async def cb_mem_season(
+    callback: CallbackQuery,
+    user_service: UserService,
+    member_policy: MemberPolicy,
+) -> None:
+    if not await _check_admin(callback, member_policy):
         return
     await callback.answer()
 
@@ -569,15 +549,14 @@ async def cb_mem_season(callback: CallbackQuery, user_service: UserService) -> N
         "⚠️ <b>Внимание! Это действие необратимо.</b>\n\n"
         "Будет выполнено:\n"
         "✅ Резервная копия базы данных\n"
-        "✅ Сброс очков всех участников\n"
         "✅ Очистка журнала активности\n"
-        "✅ Очистка истории начислений\n"
-        "✅ Очистка сезонной статистики\n\n"
+        "✅ Обнуление производной сезонной статистики\n"
+        "✅ Сброс очков активности, рассчитанных из журнала\n\n"
         "Будет сохранено:\n"
         "🔒 Все участники и роли\n"
         "🔒 Настройки и конфигурация\n"
         "🔒 Форумные темы\n"
-        "🔒 Новости и контент\n\n"
+        "🔒 Новости, контент и обращения\n\n"
         f"👥 Участников в базе: <b>{total}</b>\n\n"
         "Подтвердите запуск нового сезона:"
     )
@@ -594,16 +573,17 @@ async def cb_mem_season(callback: CallbackQuery, user_service: UserService) -> N
 @router.callback_query(F.data == MemberBtn.SEASON_OK)
 async def cb_mem_season_ok(
     callback: CallbackQuery,
+    member_policy: MemberPolicy,
     user_service: UserService,
     audit_service: AuditService,
 ) -> None:
-    if not await _check_admin(callback, user_service):
+    if not await _check_admin(callback, member_policy):
         return
 
     actor_id = callback.from_user.id
     actor_role = await user_service.get_role(actor_id)
 
-    if actor_role not in UserRole.admin_roles() and actor_id != _SUPERUSER_ID:
+    if not await member_policy.can_start_new_season(actor_id):
         await callback.answer("⛔ Только администрация клана может запустить новый сезон.", show_alert=True)
         return
 

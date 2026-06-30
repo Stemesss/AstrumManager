@@ -34,13 +34,12 @@ from aiogram.types import (
 
 from bot.keyboards.main_menu import MAIN_KEYBOARD
 from bot.models.audit import AuditAction
-from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
+from bot.services.nickname_service import NicknameService
 from bot.services.user_service import UserService
 from bot.states.nick import NickChange, NickSetup
 from bot.utils.nick_format import build_full_nick, validate_name
 from bot.utils.profile import PROFILE_KB, build_profile_card
-from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -107,27 +106,6 @@ def _preview_text(full_nick: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Вспомогательная функция: обновить Telegram Admin Title если пользователь — admin
-# ─────────────────────────────────────────────────────────────────────────────
-
-async def _try_sync_title(
-    bot: Bot,
-    group_chat_id: int,
-    user_id: int,
-    role: UserRole,
-    name: str,
-) -> str | None:
-    """Обновляет кастомный Telegram-титул для администраторов.
-
-    Для UserRole.MEMBER ничего не делает (Telegram не позволяет).
-    Возвращает None при успехе или строку с предупреждением.
-    """
-    if role not in ADMIN_TITLES:
-        return None  # MEMBER — нет Telegram-привилегий, ничего делать
-    return await sync_admin_title(bot, group_chat_id, user_id, role, game_nick=name)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # ПОТОК 1: Первичная настройка (NickSetup)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -161,6 +139,7 @@ async def cb_setup_confirm(
     callback: CallbackQuery,
     state: FSMContext,
     user_service: UserService,
+    nickname_service: NicknameService,
     audit_service: AuditService,
     bot: Bot,
     group_chat_id: int,
@@ -170,10 +149,20 @@ async def cb_setup_confirm(
     name = data.get("pending_name", "")
     await state.clear()
 
-    await user_service.set_game_nick(callback.from_user.id, name)
+    result = await nickname_service.change_nickname(
+        actor_id=callback.from_user.id,
+        target_id=callback.from_user.id,
+        raw_nick=name,
+        bot=bot,
+        group_chat_id=group_chat_id,
+        telegram_user=callback.from_user,
+    )
+    if not result["ok"]:
+        await callback.message.answer(result["error"])
+        return
 
-    role = await user_service.get_role(callback.from_user.id)
-    full_nick = build_full_nick(name, role)
+    role = result["role"]
+    full_nick = result["full_nick"]
 
     await audit_service.log(
         user_id=callback.from_user.id,
@@ -189,9 +178,7 @@ async def cb_setup_confirm(
     )
 
     # Обновить Telegram Admin Title (только для администраторов)
-    tg_error = await _try_sync_title(
-        bot, group_chat_id, callback.from_user.id, role, name
-    )
+    tg_error = result["tg_error"]
 
     await callback.message.edit_text(
         f"✅ <b>Профиль настроен!</b>\n\n"
@@ -270,7 +257,7 @@ async def cb_change_confirm(
     callback: CallbackQuery,
     state: FSMContext,
     user_service: UserService,
-    audit_service: AuditService,
+    nickname_service: NicknameService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
@@ -278,32 +265,29 @@ async def cb_change_confirm(
     data = await state.get_data()
     new_name = data.get("pending_name", "")
 
-    old_name = await user_service.get_game_nick(callback.from_user.id) or "?"
-    role = await user_service.get_role(callback.from_user.id)
-
-    await user_service.set_game_nick(callback.from_user.id, new_name)
+    result = await nickname_service.change_nickname(
+        actor_id=callback.from_user.id,
+        target_id=callback.from_user.id,
+        raw_nick=new_name,
+        bot=bot,
+        group_chat_id=group_chat_id,
+        telegram_user=callback.from_user,
+    )
+    if not result["ok"]:
+        await callback.message.answer(result["error"])
+        return
     await state.clear()
 
-    new_full = build_full_nick(new_name, role)
-    old_full  = build_full_nick(old_name, role) if old_name != "?" else old_name
-
-    await audit_service.log(
-        user_id=callback.from_user.id,
-        game_nick=old_name,
-        role=role,
-        action_type=AuditAction.MEMBER_NICK_CHANGE,
-        description=f"{old_full} изменил имя → {new_full}",
-    )
+    role = result["role"]
+    new_full = result["full_nick"]
+    old_name = result["old_nick"] or "?"
 
     logger.info(
         "Пользователь %s сменил имя: %r → %r",
         callback.from_user.id, old_name, new_name,
     )
 
-    # Обновить Telegram Admin Title (только для администраторов)
-    tg_error = await _try_sync_title(
-        bot, group_chat_id, callback.from_user.id, role, new_name
-    )
+    tg_error = result["tg_error"]
 
     stats = await user_service.get_profile_stats(callback.from_user.id)
     await callback.message.edit_text(
