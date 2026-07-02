@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "python-3.11"]
+modules = ["python-3.11", "nodejs-20", "web"]
 
 [deployment]
 router = "application"
@@ -32,7 +32,7 @@ task = "shell.exec"
 args = "cd /home/runner/workspace && python3 main.py"
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
@@ -41,6 +41,7 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+packages = ["cacert", "libxcrypt"]
 
 [userenv]
 
