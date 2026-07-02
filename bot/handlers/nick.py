@@ -307,7 +307,7 @@ async def cb_change_confirm(
 
     stats = await user_service.get_profile_stats(callback.from_user.id)
     await callback.message.edit_text(
-        f"✅ <b>Имя успешно изменено!</b>\n\n"
+        "✅ <b>Имя успешно изменено!</b>\n\n"
         + build_profile_card(new_name, role, stats),
         reply_markup=PROFILE_KB,
     )

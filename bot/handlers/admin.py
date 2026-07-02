@@ -15,7 +15,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.admin_panel import ADMIN_PANEL_KB, AdminBtn
 from bot.keyboards.audit import audit_menu_kb
-from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.keyboards.main_menu import BTN
 from bot.keyboards.nav import CANCEL_KB
 from bot.models.user import UserRole
 from bot.services.news_service import NewsService

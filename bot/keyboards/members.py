@@ -3,7 +3,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.models.user import User, UserRole
-from bot.utils.roles import ROLE_ORDER, assignable_roles
+from bot.utils.roles import assignable_roles
 
 PAGE_SIZE = 10
 

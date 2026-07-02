@@ -15,7 +15,6 @@ from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery
 
 from bot.keyboards.icons import TopicIconBtn, icons_panel_kb, sticker_picker_kb
-from bot.keyboards.topics import TopicBtn, topics_menu_kb
 from bot.models.topic import TOPIC_LABELS
 from bot.models.user import UserRole
 from bot.services.topic_service import TopicService

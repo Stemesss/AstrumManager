@@ -19,7 +19,7 @@ from bot.keyboards.audit import (
     audit_page_kb,
     audit_search_result_kb,
 )
-from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.keyboards.main_menu import BTN
 from bot.keyboards.nav import CANCEL_KB
 from bot.models.audit import CATEGORY_LABELS
 from bot.models.user import UserRole

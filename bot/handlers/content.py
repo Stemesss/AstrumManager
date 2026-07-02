@@ -29,7 +29,7 @@ from bot.keyboards.content import (
     content_list_kb,
     content_view_kb,
 )
-from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.keyboards.main_menu import BTN
 from bot.models.audit import AuditAction
 from bot.models.news import NewsItem
 from bot.models.user import UserRole
@@ -378,7 +378,7 @@ async def fsm_edit_content(
         action_type=cfg.get("audit_edit", AuditAction.NEWS_EDIT),
         description=f"{role_label(actor_role)} {actor_nick} изменил текст {cfg.get('label_gen','записи')} #{item_id}",
     )
-    await message.answer(f"✅ <b>Текст обновлён!</b>")
+    await message.answer("✅ <b>Текст обновлён!</b>")
 
 
 # ── Удаление ──────────────────────────────────────────────────────────────────

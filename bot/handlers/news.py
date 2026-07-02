@@ -13,7 +13,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.keyboards.main_menu import BTN
 from bot.keyboards.nav import CANCEL_KB
 from bot.keyboards.news import (
     news_delete_confirm_kb,

@@ -25,7 +25,6 @@ import datetime
 import logging
 
 from aiogram import Bot, F, Router
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -479,8 +478,7 @@ async def cb_mem_del_card(callback: CallbackQuery, user_service: UserService) ->
     )
 
     # Проверяем ограничения заранее, чтобы сразу показать причину
-    _SUPERUSER = 8490615925
-    if target_id == _SUPERUSER:
+    if target_id == _SUPERUSER_ID:
         text = "⛔ Невозможно удалить суперпользователя."
         await callback.answer()
         await callback.message.edit_text(

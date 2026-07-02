@@ -15,6 +15,12 @@ class BTN:
     STATS       = "📈 Статистика"
     PROFILE     = "👤 Мой профиль"
     HELP        = "❓ Помощь"
+    # Кнопки убраны из MAIN_KEYBOARD в v1.2, но константы сохранены —
+    # bot/handlers/content.py использует их как ключи конфигурации разделов
+    # и как текстовые точки входа (доступны через админ-панель / прямой ввод текста).
+    GUIDES      = "📚 Гайды"
+    SCREENSHOTS = "📸 Скриншоты"
+    MEMES       = "😂 Мемы"
 
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(

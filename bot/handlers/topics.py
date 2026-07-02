@@ -10,7 +10,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.admin_panel import AdminBtn, ADMIN_PANEL_KB
+from bot.keyboards.admin_panel import AdminBtn
 from bot.keyboards.topics import TOPICS_CANCEL_KB, TopicBtn, topics_menu_kb
 from bot.models.topic import TOPIC_LABELS
 from bot.models.user import UserRole

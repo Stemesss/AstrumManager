@@ -7,7 +7,6 @@ from aiogram.types import Message
 
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
 from bot.services.user_service import UserService
-from bot.utils.nick_format import build_full_nick
 from bot.utils.profile import PROFILE_KB, build_profile_card
 from bot.utils.roles import role_label
 

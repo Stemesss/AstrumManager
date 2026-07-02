@@ -9,3 +9,4 @@
 - [Audit log](audit.md) — found and fixed defects; updated when bug is found or fixed
 - [Workflow](workflow.md) — development SOP, stage tracker, Replit workflow status
 - [Dev rules](dev_rules.md) — mandatory coding rules: webhook-only, DI pattern, nick format, role titles, forbidden patterns
+- [Menu button constant coupling](menu-button-coupling.md) — BTN constants in main_menu.py are shared config keys, not just UI labels; removing one can crash unrelated handlers at import time

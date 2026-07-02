@@ -18,9 +18,9 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.keyboards.main_menu import BTN
 from bot.keyboards.nav import CANCEL_KB
-from bot.keyboards.rules import rules_cancel_kb, rules_view_kb
+from bot.keyboards.rules import rules_view_kb
 from bot.models.audit import AuditAction
 from bot.models.user import UserRole
 from bot.services.audit_service import AuditService

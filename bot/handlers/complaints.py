@@ -68,7 +68,7 @@ def _fmt_complaint(row, show_author: bool = True) -> str:
         lines.append(f"📅 {_fmt_date(row['created_at'])}")
     lines.append(f"🏷 {status_label(row['status'])}")
     if row["admin_reply"]:
-        lines += ["", f"💬 <b>Ответ администрации:</b>", row["admin_reply"]]
+        lines += ["", "💬 <b>Ответ администрации:</b>", row["admin_reply"]]
         if row["replied_by"]:
             lines.append(f"<i>— {row['replied_by']}</i>")
     return "\n".join(lines)

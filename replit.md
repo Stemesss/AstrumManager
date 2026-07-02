@@ -1,6 +1,6 @@
 # AstrumManager — Telegram Bot
 
-**VERSION: 1.0 | STATUS: STABLE**
+**VERSION: 1.2.1 | STATUS: STABLE**
 
 > Читать перед работой: [`AGENT_START.md`](AGENT_START.md)
 

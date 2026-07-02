@@ -14,7 +14,7 @@
     (не стандартные Unicode-эмодзи; конкретные ID получаются через
     getForumTopicIconStickers или устанавливаются вручную).
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

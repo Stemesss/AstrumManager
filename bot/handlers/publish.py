@@ -17,7 +17,6 @@ import logging
 import re
 
 from aiogram import Bot, F, Router
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -26,7 +25,6 @@ from bot.keyboards.main_menu import MAIN_KEYBOARD
 from bot.keyboards.nav import CANCEL_KB
 from bot.keyboards.publish import ATTACH_KB, PREVIEW_KB, PublishBtn
 from bot.models.audit import AuditAction
-from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
 from bot.services.topic_service import TopicService
