@@ -134,6 +134,46 @@ def season_confirm_kb() -> InlineKeyboardMarkup:
     ])
 
 
+class MemberViewBtn:
+    """Callback-данные раздела просмотра участников (главное меню, только просмотр)."""
+    NOOP  = "memv:noop"
+    CLOSE = "memv:close"
+
+    @staticmethod
+    def list(page: int) -> str:
+        return f"memv:list:{page}"
+
+    @staticmethod
+    def card(uid: int, page: int) -> str:
+        return f"memv:card:{uid}:{page}"
+
+
+def view_list_kb(users: list[User], page: int, total: int) -> InlineKeyboardMarkup:
+    """Список участников — только просмотр (главное меню, без прав администратора)."""
+    rows: list[list[InlineKeyboardButton]] = []
+
+    for u in users:
+        icon = _ICONS.get(u.role, "👤")
+        name = u.game_nick or u.first_name
+        rows.append([
+            InlineKeyboardButton(
+                text=f"{icon} {name}",
+                callback_data=MemberViewBtn.card(u.telegram_id, page),
+            ),
+        ])
+
+    rows.extend(_pagination_rows(page, total, prefix="memv:list", noop=MemberViewBtn.NOOP))
+    rows.append([InlineKeyboardButton(text="❌ Закрыть", callback_data=MemberViewBtn.CLOSE)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def view_card_kb(user_id: int, page: int = 0) -> InlineKeyboardMarkup:
+    """Карточка участника — только просмотр (главное меню, без административных кнопок)."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад к списку", callback_data=MemberViewBtn.list(page))],
+    ])
+
+
 def member_card_kb(user_id: int, page: int = 0) -> InlineKeyboardMarkup:
     """Кнопки карточки участника."""
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -157,7 +197,7 @@ def role_select_kb(actor_role: UserRole, target_id: int) -> InlineKeyboardMarkup
 
 
 def _pagination_rows(
-    page: int, total: int, prefix: str
+    page: int, total: int, prefix: str, noop: str = MemberBtn.NOOP
 ) -> list[list[InlineKeyboardButton]]:
     """Строки навигации: ◀️ | N/M | ▶️."""
     total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -165,7 +205,7 @@ def _pagination_rows(
     if page > 0:
         nav.append(InlineKeyboardButton(text="◀️", callback_data=f"{prefix}:{page - 1}"))
     if total_pages > 1:
-        nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data=MemberBtn.NOOP))
+        nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data=noop))
     if page < total_pages - 1:
         nav.append(InlineKeyboardButton(text="▶️", callback_data=f"{prefix}:{page + 1}"))
     return [nav] if nav else []

@@ -20,6 +20,12 @@
   mem:season_ok                → выполнить сброс сезона
   mem:noop                     → индикатор страницы (без действия)
   mem:close                    → удалить сообщение
+
+  Раздел «Участники» в главном меню (только просмотр, без прав администратора):
+  memv:list:{page}             → список участников (просмотр)
+  memv:card:{uid}:{page}       → карточка участника (просмотр)
+  memv:noop                    → индикатор страницы (без действия)
+  memv:close                   → удалить сообщение
 """
 import datetime
 import logging
@@ -29,9 +35,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.admin_panel import AdminBtn
+from bot.keyboards.main_menu import BTN
 from bot.keyboards.members import (
     PAGE_SIZE,
     MemberBtn,
+    MemberViewBtn,
     delete_card_kb,
     delete_list_kb,
     delete_search_result_kb,
@@ -40,6 +48,8 @@ from bot.keyboards.members import (
     members_menu_kb,
     role_select_kb,
     season_confirm_kb,
+    view_card_kb,
+    view_list_kb,
 )
 from bot.keyboards.nav import CANCEL_KB
 from bot.models.audit import AuditAction
@@ -151,6 +161,73 @@ async def _show_delete_list(
         await cb.message.edit_text(text, reply_markup=kb)
     except Exception:
         await cb.message.answer(text, reply_markup=kb)
+
+
+async def _view_list_users(user_service: UserService) -> list[User]:
+    # Показываем только участников с установленным игровым ником (как в админ-разделе)
+    return _sort_users([u for u in await user_service.get_all_users() if u.game_nick])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Главное меню → «Участники» (только просмотр, без прав администратора)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(F.text == BTN.MEMBERS)
+async def handle_members_view(message: Message, user_service: UserService) -> None:
+    """Красивый просмотр списка участников — без административных функций."""
+    all_users = await _view_list_users(user_service)
+    total = len(all_users)
+    if total == 0:
+        await message.answer("👥 <b>Участники</b>\n\nСписок пока пуст.")
+        return
+    page_users = all_users[:PAGE_SIZE]
+    text = f"👥 <b>Участники клана</b>\n\nВсего: {total}\n\nВыберите участника:"
+    await message.answer(text, reply_markup=view_list_kb(page_users, 0, total))
+
+
+@router.callback_query(F.data.startswith("memv:list:"))
+async def cb_memv_list(callback: CallbackQuery, user_service: UserService) -> None:
+    page = int(callback.data.split(":")[2])
+    all_users = await _view_list_users(user_service)
+    total = len(all_users)
+    page_users = all_users[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
+    text = f"👥 <b>Участники клана</b>\n\nВсего: {total}\n\nВыберите участника:"
+    kb = view_list_kb(page_users, page, total)
+    await callback.answer()
+    try:
+        await callback.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("memv:card:"))
+async def cb_memv_card(callback: CallbackQuery, user_service: UserService) -> None:
+    parts = callback.data.split(":")
+    user_id = int(parts[2])
+    page = int(parts[3]) if len(parts) > 3 else 0
+    u = await _find_user(user_service, user_id)
+    if not u:
+        await callback.answer("Участник не найден.", show_alert=True)
+        return
+    await callback.answer()
+    try:
+        await callback.message.edit_text(_card_text(u), reply_markup=view_card_kb(user_id, page))
+    except Exception:
+        await callback.message.answer(_card_text(u), reply_markup=view_card_kb(user_id, page))
+
+
+@router.callback_query(F.data == MemberViewBtn.NOOP)
+async def cb_memv_noop(callback: CallbackQuery) -> None:
+    await callback.answer()
+
+
+@router.callback_query(F.data == MemberViewBtn.CLOSE)
+async def cb_memv_close(callback: CallbackQuery) -> None:
+    await callback.answer()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────

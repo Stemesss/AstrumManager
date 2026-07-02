@@ -8,27 +8,11 @@ from aiogram.types import Message
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
 from bot.services.user_service import UserService
 from bot.utils.profile import PROFILE_KB, build_profile_card
-from bot.utils.roles import role_label
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 _WIP = "🚧 Раздел находится в разработке."
-
-
-@router.message(F.text == BTN.MEMBERS)
-async def handle_members(message: Message, user_service: UserService) -> None:
-    """Показывает список участников клана."""
-    users = await user_service.get_all_users()
-    if not users:
-        await message.answer("👥 <b>Участники</b>\n\nСписок пока пуст.")
-        return
-
-    lines = [f"👥 <b>Участники клана Astrum</b> ({len(users)})\n"]
-    for u in users:
-        display = u.game_nick or u.first_name
-        lines.append(f"• {display} — {role_label(u.role)}")
-    await message.answer("\n".join(lines))
 
 
 @router.message(F.text == BTN.PROFILE)
