@@ -50,6 +50,10 @@ class AuditAction:
     # ── Системные операции ────────────────────────────────────────────────
     MEMBER_DELETE  = "member_delete"
     SEASON_RESET   = "season_reset"
+    SYNC_TITLES    = "sync_titles"
+    CLEAN_ABSENT   = "clean_absent"
+    NICK_REPORT    = "nick_report"
+    NICK_REMIND    = "nick_remind"
 
 
 # Фильтр action_type для каждой категории (None = без фильтра).
@@ -61,6 +65,10 @@ CATEGORY_ACTIONS: dict[str, list[str] | None] = {
         AuditAction.MEMBER_NICK_CHANGE,
         AuditAction.MEMBER_DELETE,
         AuditAction.SEASON_RESET,
+        AuditAction.SYNC_TITLES,
+        AuditAction.CLEAN_ABSENT,
+        AuditAction.NICK_REPORT,
+        AuditAction.NICK_REMIND,
     ],
     "news": [
         AuditAction.NEWS_CREATE,

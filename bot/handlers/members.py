@@ -27,10 +27,12 @@
   memv:noop                    → индикатор страницы (без действия)
   memv:close                   → удалить сообщение
 """
+import asyncio
 import datetime
 import logging
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -40,12 +42,14 @@ from bot.keyboards.members import (
     PAGE_SIZE,
     MemberBtn,
     MemberViewBtn,
+    clean_absent_confirm_kb,
     delete_card_kb,
     delete_list_kb,
     delete_search_result_kb,
     member_card_kb,
     members_list_kb,
     members_menu_kb,
+    nick_report_kb,
     role_select_kb,
     season_confirm_kb,
     view_card_kb,
@@ -56,6 +60,7 @@ from bot.models.audit import AuditAction
 from bot.models.user import User, UserRole
 from bot.services.audit_service import AuditService
 from bot.services.stats_service import StatsService
+from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 from bot.states.members import MemberDelete
 from bot.utils.roles import ROLE_ORDER, assignable_roles, can_assign, role_label
@@ -733,3 +738,423 @@ async def cb_mem_season_ok(
         await callback.message.edit_text(report, reply_markup=members_menu_kb())
     except Exception:
         await callback.message.answer(report, reply_markup=members_menu_kb())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Очистить отсутствующих — предварительный просмотр
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == MemberBtn.CLEAN_ABSENT)
+async def cb_mem_clean_absent(
+    callback: CallbackQuery,
+    user_service: UserService,
+    bot: Bot,
+    group_chat_id: int,
+) -> None:
+    """Проверяет участников через getChatMember, показывает список отсутствующих."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+
+    all_users = await user_service.get_all_users()
+    actor_id = callback.from_user.id
+
+    # Временное сообщение о прогрессе
+    try:
+        await callback.message.edit_text(
+            f"⏳ <b>Проверка участников...</b>\n\nПроверяю {len(all_users)} записей..."
+        )
+    except Exception:
+        pass
+
+    absent: list[tuple[str, int, str]] = []  # (display_name, telegram_id, status_label)
+
+    for u in all_users:
+        # Защита — суперпользователь, сам себя, Лидер
+        if u.telegram_id == _SUPERUSER_ID or u.telegram_id == actor_id:
+            continue
+        if u.role == UserRole.LEADER:
+            continue
+
+        display = u.game_nick or u.first_name
+        try:
+            member = await bot.get_chat_member(group_chat_id, u.telegram_id)
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+            try:
+                member = await bot.get_chat_member(group_chat_id, u.telegram_id)
+            except Exception:
+                absent.append((display, u.telegram_id, "не найден"))
+                continue
+        except TelegramBadRequest as e:
+            err = str(e).lower()
+            if any(k in err for k in ("user not found", "participant", "user_not_participant")):
+                absent.append((display, u.telegram_id, "не в группе"))
+            continue
+        except Exception:
+            continue
+
+        if member.status == "creator":
+            continue  # владелец группы — всегда защищён
+        if member.status in ("left", "kicked"):
+            status_label = "покинул группу" if member.status == "left" else "исключён"
+            absent.append((display, u.telegram_id, status_label))
+
+        await asyncio.sleep(0.1)
+
+    if not absent:
+        try:
+            await callback.message.edit_text(
+                "✅ <b>Все участники присутствуют в группе.</b>\n\n"
+                "Отсутствующих не обнаружено.",
+                reply_markup=members_menu_kb(),
+            )
+        except Exception:
+            await callback.message.answer(
+                "✅ Все участники присутствуют в группе.",
+                reply_markup=members_menu_kb(),
+            )
+        return
+
+    lines = [
+        f"🧹 <b>Очистить отсутствующих</b>",
+        "",
+        f"Найдено {len(absent)} участников не в группе:",
+        "",
+    ]
+    for name, uid, status in absent:
+        lines.append(f"• <b>{name}</b> (ID: <code>{uid}</code>) — {status}")
+
+    lines += [
+        "",
+        "⚠️ После подтверждения они будут удалены из базы данных.",
+        "<b>Это действие необратимо.</b>",
+    ]
+
+    text = "\n".join(lines)
+    kb = clean_absent_confirm_kb(len(absent))
+    try:
+        await callback.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, reply_markup=kb)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Очистить отсутствующих — выполнение
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == MemberBtn.CLEAN_ABSENT_OK)
+async def cb_mem_clean_absent_ok(
+    callback: CallbackQuery,
+    user_service: UserService,
+    audit_service: AuditService,
+    bot: Bot,
+    group_chat_id: int,
+) -> None:
+    """Удаляет из БД участников, отсутствующих в Telegram-группе."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+
+    actor_id = callback.from_user.id
+    actor_role = await user_service.get_role(actor_id)
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+    all_users = await user_service.get_all_users()
+
+    try:
+        await callback.message.edit_text("⏳ <b>Выполняется очистка...</b>")
+    except Exception:
+        pass
+
+    removed: list[str]  = []
+    skipped: list[str]  = []
+    errors:  list[str]  = []
+
+    for u in all_users:
+        # Защита
+        if u.telegram_id == _SUPERUSER_ID or u.telegram_id == actor_id:
+            continue
+        if u.role == UserRole.LEADER:
+            continue
+
+        display = u.game_nick or u.first_name
+
+        # Проверяем статус в группе.
+        # ВАЖНО: удалять из БД только при ПОДТВЕРЖДЁННОМ отсутствии.
+        # Сбой API (даже после retry) → пропускаем, не удаляем.
+        is_absent = False
+
+        try:
+            member = await bot.get_chat_member(group_chat_id, u.telegram_id)
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+            try:
+                member = await bot.get_chat_member(group_chat_id, u.telegram_id)
+            except TelegramBadRequest as e2:
+                err2 = str(e2).lower()
+                if any(k in err2 for k in ("user not found", "participant", "user_not_participant")):
+                    is_absent = True  # подтверждено: не в группе
+                else:
+                    skipped.append(f"{display}: ошибка API после повторной попытки")
+                    continue
+            except Exception:
+                # Не удалось проверить даже после retry — пропускаем, НЕ удаляем
+                skipped.append(f"{display}: не удалось проверить (API недоступен)")
+                continue
+            else:
+                if member.status == "creator":
+                    continue
+                if member.status not in ("left", "kicked"):
+                    continue
+                is_absent = True
+        except TelegramBadRequest as e:
+            err = str(e).lower()
+            if any(k in err for k in ("user not found", "participant", "user_not_participant")):
+                is_absent = True  # подтверждено: не является участником
+            else:
+                skipped.append(f"{display}: ошибка API")
+                continue
+        except Exception as exc:
+            skipped.append(f"{display}: {exc}")
+            continue
+        else:
+            # Успешно получили — проверяем статус
+            if member.status == "creator":
+                continue
+            if member.status not in ("left", "kicked"):
+                continue  # присутствует в группе — не трогаем
+            is_absent = True
+
+        if not is_absent:
+            continue
+
+        # ── Пытаемся снять права администратора ─────────────────────────
+        try:
+            await bot.promote_chat_member(
+                chat_id=group_chat_id,
+                user_id=u.telegram_id,
+                can_manage_chat=False,
+                can_delete_messages=False,
+                can_manage_video_chats=False,
+                can_restrict_members=False,
+                can_promote_members=False,
+                can_change_info=False,
+                can_invite_users=False,
+                can_pin_messages=False,
+            )
+        except Exception:
+            pass  # уже нет прав или уже не в группе — OK
+
+        # ── Удаляем из БД ───────────────────────────────────────────────
+        result = await user_service.delete_member(actor_id, u.telegram_id)
+        if result["ok"]:
+            removed.append(display)
+        else:
+            errors.append(f"{display}: {result['error']}")
+
+        await asyncio.sleep(0.1)
+
+    # ── Журнал аудита ────────────────────────────────────────────────────
+    await audit_service.log(
+        user_id=actor_id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.CLEAN_ABSENT,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} очистил отсутствующих: "
+            f"удалено {len(removed)}, пропущено {len(skipped)}, ошибок {len(errors)}. "
+            f"Удалены: {', '.join(removed) or '—'}"
+        ),
+    )
+    logger.info(
+        "clean_absent: actor=%s removed=%d skipped=%d errors=%d",
+        actor_id, len(removed), len(skipped), len(errors),
+    )
+
+    # ── Отчёт ────────────────────────────────────────────────────────────
+    lines = [
+        "✅ <b>Очистка завершена</b>",
+        "",
+        f"🗑️ Удалено из БД: <b>{len(removed)}</b>",
+        f"⏭️ Пропущено: <b>{len(skipped)}</b>",
+        f"❌ Ошибок: <b>{len(errors)}</b>",
+    ]
+    if removed:
+        lines += ["", "🗑️ <b>Удалены:</b>"]
+        lines += [f"  • {n}" for n in removed]
+    if skipped:
+        lines += ["", "⏭️ <b>Пропущено:</b>"]
+        lines += [f"  • {s}" for s in skipped]
+    if errors:
+        lines += ["", "❌ <b>Ошибки:</b>"]
+        lines += [f"  • {e}" for e in errors]
+
+    report = "\n".join(lines)
+    try:
+        await callback.message.edit_text(report, reply_markup=members_menu_kb())
+    except Exception:
+        await callback.message.answer(report, reply_markup=members_menu_kb())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Детальный отчёт по игровым никам
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == MemberBtn.NICK_REPORT)
+async def cb_mem_nick_report(
+    callback: CallbackQuery,
+    user_service: UserService,
+    audit_service: AuditService,
+) -> None:
+    """Показывает детальный отчёт: кто имеет ник, а кто нет."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+
+    all_users = await user_service.get_all_users()
+    total = len(all_users)
+    with_nick    = [u for u in all_users if u.game_nick]
+    without_nick = [u for u in all_users if not u.game_nick]
+
+    lines = [
+        "📋 <b>Детальный отчёт по игровым никам</b>",
+        "",
+        f"👥 Всего участников: <b>{total}</b>",
+        f"✅ Есть игровой ник: <b>{len(with_nick)}</b>",
+        f"❌ Нет игрового ника: <b>{len(without_nick)}</b>",
+    ]
+
+    if with_nick:
+        lines += ["", "✅ <b>Есть игровой ник:</b>"]
+        for u in _sort_users(with_nick):
+            icon = _ICONS.get(u.role, "◇")
+            lines.append(f"  {icon} {u.game_nick}  <code>{u.telegram_id}</code>")
+
+    if without_nick:
+        lines += ["", "❌ <b>Нет игрового ника:</b>"]
+        for u in _sort_users(without_nick):
+            icon = _ICONS.get(u.role, "◇")
+            if u.username:
+                label = f"@{u.username}"
+            else:
+                label = u.first_name
+            lines.append(f"  {icon} {label}  <code>{u.telegram_id}</code>")
+
+    report = "\n".join(lines)
+    if len(report) > 4000:
+        report = report[:4000] + "\n…\n<i>(отчёт обрезан)</i>"
+
+    # Журнал
+    actor_id = callback.from_user.id
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+    actor_role = await user_service.get_role(actor_id)
+    await audit_service.log(
+        user_id=actor_id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.NICK_REPORT,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} просмотрел отчёт по никам: "
+            f"всего {total}, с ником {len(with_nick)}, без ника {len(without_nick)}"
+        ),
+    )
+
+    try:
+        await callback.message.edit_text(report, reply_markup=nick_report_kb())
+    except Exception:
+        await callback.message.answer(report, reply_markup=nick_report_kb())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Напомнить без ника — отправка в тему «📢 Объявления»
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == MemberBtn.NICK_REMIND)
+async def cb_mem_nick_remind(
+    callback: CallbackQuery,
+    user_service: UserService,
+    audit_service: AuditService,
+    topic_service: TopicService,
+    bot: Bot,
+) -> None:
+    """Публикует в тему «Объявления» напоминание для участников без игрового ника."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+
+    all_users = await user_service.get_all_users()
+    without_nick = [u for u in all_users if not u.game_nick]
+
+    if not without_nick:
+        try:
+            await callback.message.edit_text(
+                "✅ Все участники имеют игровой ник!\n\nНапоминание не требуется.",
+                reply_markup=nick_report_kb(),
+            )
+        except Exception:
+            await callback.message.answer(
+                "✅ Все участники имеют игровой ник!",
+                reply_markup=nick_report_kb(),
+            )
+        return
+
+    # Разделяем: кому можно @упомянуть, у кого нет username
+    can_mention: list[str] = []
+    no_username:  list[str] = []
+
+    for u in without_nick:
+        if u.username:
+            can_mention.append(f"@{u.username}")
+        else:
+            label = u.first_name
+            no_username.append(f"{label} (ID: {u.telegram_id})")
+
+    # Формируем текст публикации
+    mention_block = "\n".join(can_mention) if can_mention else ""
+    pub_text = (
+        "⚠️ <b>Просьба заполнить игровой ник.</b>\n\n"
+        f"{mention_block}\n\n"
+        "Пожалуйста, откройте бота и заполните игровой ник."
+    ).strip()
+
+    published = await topic_service.publish(
+        bot, "announcements", pub_text, parse_mode="HTML"
+    )
+
+    actor_id = callback.from_user.id
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+    actor_role = await user_service.get_role(actor_id)
+
+    await audit_service.log(
+        user_id=actor_id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.NICK_REMIND,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} отправил напоминание о никах: "
+            f"упомянуто {len(can_mention)}, без username {len(no_username)}, "
+            f"публикация {'выполнена' if published else 'не удалась'}"
+        ),
+    )
+
+    logger.info(
+        "nick_remind: actor=%s mentioned=%d no_username=%d published=%s",
+        actor_id, len(can_mention), len(no_username), published,
+    )
+
+    # ── Отчёт о результатах ─────────────────────────────────────────────
+    lines = [
+        "📢 <b>Напоминание отправлено</b>" if published else "❌ <b>Не удалось отправить напоминание</b>",
+        "",
+        f"✅ Упомянуто участников: <b>{len(can_mention)}</b>",
+        f"⏭️ Без username (пропущены): <b>{len(no_username)}</b>",
+    ]
+    if no_username:
+        lines += ["", "⚠️ <b>Не удалось отметить (нет username):</b>"]
+        lines += [f"  • {n}" for n in no_username]
+
+    result_text = "\n".join(lines)
+    try:
+        await callback.message.edit_text(result_text, reply_markup=nick_report_kb())
+    except Exception:
+        await callback.message.answer(result_text, reply_markup=nick_report_kb())

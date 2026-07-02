@@ -21,9 +21,13 @@ class MemberBtn:
     NOOP         = "mem:noop"
     CLOSE        = "mem:close"
 
-    DEL_SEARCH   = "mem:del_search"
-    SEASON       = "mem:season"
-    SEASON_OK    = "mem:season_ok"
+    DEL_SEARCH      = "mem:del_search"
+    SEASON          = "mem:season"
+    SEASON_OK       = "mem:season_ok"
+    CLEAN_ABSENT    = "mem:clean_absent"
+    CLEAN_ABSENT_OK = "mem:clean_absent_ok"
+    NICK_REPORT     = "mem:nick_report"
+    NICK_REMIND     = "mem:nick_remind"
 
     @staticmethod
     def list(page: int) -> str:
@@ -57,9 +61,11 @@ class MemberBtn:
 def members_menu_kb() -> InlineKeyboardMarkup:
     """Главное меню раздела «Участники»."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Просмотреть участников", callback_data=MemberBtn.list(0))],
-        [InlineKeyboardButton(text="🗑️ Удалить участника",      callback_data=MemberBtn.del_list(0))],
-        [InlineKeyboardButton(text="🧹 Новый сезон",             callback_data=MemberBtn.SEASON)],
+        [InlineKeyboardButton(text="👤 Просмотреть участников",  callback_data=MemberBtn.list(0))],
+        [InlineKeyboardButton(text="📋 Детальный отчёт",         callback_data=MemberBtn.NICK_REPORT)],
+        [InlineKeyboardButton(text="🧹 Очистить отсутствующих",  callback_data=MemberBtn.CLEAN_ABSENT)],
+        [InlineKeyboardButton(text="🗑️ Удалить участника",       callback_data=MemberBtn.del_list(0))],
+        [InlineKeyboardButton(text="🔄 Новый сезон",             callback_data=MemberBtn.SEASON)],
         [InlineKeyboardButton(text="❌ Закрыть",                 callback_data=MemberBtn.CLOSE)],
     ])
 
@@ -124,6 +130,25 @@ def delete_search_result_kb(users: list[User]) -> InlineKeyboardMarkup:
         )])
     rows.append([InlineKeyboardButton(text="⬅️ К списку участников", callback_data=MemberBtn.del_list(0))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def clean_absent_confirm_kb(count: int) -> InlineKeyboardMarkup:
+    """Подтверждение очистки отсутствующих участников."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"✅ Очистить {count} участн.",
+            callback_data=MemberBtn.CLEAN_ABSENT_OK,
+        )],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data=MemberBtn.MENU)],
+    ])
+
+
+def nick_report_kb() -> InlineKeyboardMarkup:
+    """Клавиатура детального отчёта по игровым никам."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📢 Напомнить без ника", callback_data=MemberBtn.NICK_REMIND)],
+        [InlineKeyboardButton(text="⬅️ Меню участников",   callback_data=MemberBtn.MENU)],
+    ])
 
 
 def season_confirm_kb() -> InlineKeyboardMarkup:

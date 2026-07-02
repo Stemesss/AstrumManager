@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, audit, cancel, common, complaints, content, debug, echo, group, group_nick, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, topics
+from bot.handlers import admin, audit, cancel, common, complaints, content, debug, echo, group, group_nick, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, synctitles, topics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.middlewares.nick_gate import NickGateMiddleware
 from bot.services.audit_service import AuditService
@@ -162,7 +162,8 @@ def build_dispatcher(
     private.include_router(publish.router)  # мастер публикаций — после news, до admin
     private.include_router(topics.router)  # до admin — перекрывает admin:settings WIP-заглушку
     private.include_router(icons.router)   # управление иконками форумных тем
-    private.include_router(members.router) # до admin — перехватывает admin:members и admin:roles
+    private.include_router(members.router)     # до admin — перехватывает admin:members и admin:roles
+    private.include_router(synctitles.router)  # /synctitles — массовая синхронизация титулов
     private.include_router(content.router)     # события, гайды, скриншоты, мемы
     private.include_router(complaints.router)  # жалобы и предложения
     private.include_router(rules.router)       # правила клана
