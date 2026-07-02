@@ -12,6 +12,10 @@ STATUS:   STABLE
 VERSION:  1.2.6
 DATE:     2026-07-02
 PLATFORM: Replit (новый аккаунт, перенос 2026-07-02)
+HEAD:     6648387 — Update project rules to enforce a consistent report format
+ORIGIN:   1ad6b07 — Add member event handlers and update documentation
+GIT SYNC: локально на 2 коммита впереди origin/main (aiosqlite dependency,
+          report format rule) — до push; функционал бота не менялся
 ```
 
 ## Воркфлоу
