@@ -20,27 +20,37 @@ ID:       AUD-NNN
 
 ---
 
+## AUD-008 — Формат custom_title содержал текст роли (требовался только символ + ник)
+
+```
+ID:        AUD-008
+Дата:      2026-07-02
+Статус:    исправлен
+Приоритет: high
+Описание:  build_admin_title (v1.2.4) генерировал «✪ Вадим — Лидер».
+           Текст роли занимал место и из-за ограничения 16 символов
+           ник обрезался до 1 символа для ролей «Дитя клана»/«Старейшина».
+Причина:   Требования были скорректированы: нужен только символ + ник.
+Решение:   build_admin_title упрощён до формата «{symbol} {game_nick}».
+           Ник теперь занимает до 14 символов (2 = символ + пробел).
+           Удалена константа _SEP. ADMIN_TITLES сокращён до символов.
+Файлы:    bot/utils/sync_title.py, bot/handlers/setrole.py
+```
+
+---
+
 ## AUD-007 — Неверный формат Telegram custom_title
 
 ```
 ID:        AUD-007
 Дата:      2026-07-02
-Статус:    исправлен
+Статус:    исправлен (заменён AUD-008)
 Приоритет: high
-Описание:  build_admin_title генерировал формат «Воин | Ник» вместо
-           требуемого «✦ Ник — Дитя клана». MEMBER не получал custom_title
-           (понижался до обычного участника). Источник имени был неопределён
-           (в setrole.py game_nick не передавался в sync_admin_title).
-Причина:   Первоначальная реализация использовала другой формат (роль первой,
-           потом ник через ASCII-разделитель). Требования были изменены.
-Решение:   Полностью переписан build_admin_title в sync_title.py:
-           новый формат {symbol} {game_nick} — {role_label} для всех 4 ролей.
-           MEMBER теперь тоже получает promote + custom_title.
-           setrole.py передаёт game_nick в sync_admin_title.
-           Удалены guard-проверки if role not in ADMIN_TITLES в nick.py и group_nick.py.
-Файлы:    bot/utils/sync_title.py, bot/handlers/nick.py,
-          bot/handlers/setrole.py, bot/handlers/group_nick.py,
-          bot/handlers/members.py
+Описание:  build_admin_title генерировал формат «Воин | Ник» вместо нужного.
+           MEMBER не получал custom_title. В setrole.py game_nick не передавался.
+Решение:   Переписан build_admin_title; MEMBER получает promote + custom_title;
+           добавлена передача game_nick во всех call sites.
+Файлы:    bot/utils/sync_title.py, nick.py, setrole.py, group_nick.py, members.py
 ```
 
 ---
@@ -69,11 +79,9 @@ ID:        AUD-002
 Дата:      2026-07-02
 Статус:    исправлен
 Приоритет: critical
-Описание:  API Server падал с "Cannot find package 'esbuild'"
-           после миграции на Replit.
+Описание:  API Server падал с "Cannot find package 'esbuild'".
 Причина:   node_modules отсутствовали в новой среде.
 Решение:   pnpm install --no-frozen-lockfile
-Файлы:     artifacts/api-server/package.json, pnpm-lock.yaml
 ```
 
 ---
@@ -86,9 +94,8 @@ ID:        AUD-003
 Статус:    исправлен
 Приоритет: high
 Описание:  Mockup sandbox падал с "sh: 1: vite: not found".
-Причина:   node_modules отсутствовали (та же причина, что AUD-002).
-Решение:   pnpm install — установил vite вместе с остальными пакетами.
-Файлы:     artifacts/mockup-sandbox/package.json
+Причина:   node_modules отсутствовали.
+Решение:   pnpm install
 ```
 
 ---
@@ -100,11 +107,8 @@ ID:        AUD-004
 Дата:      2026-07-02
 Статус:    исправлен
 Приоритет: critical
-Описание:  Бот падал при старте с "AttributeError: type object 'BTN' has no
-           attribute 'GUIDES'" — бот вообще не запускался.
-Причина:   Константы BTN.GUIDES/SCREENSHOTS/MEMES удалены из класса BTN
-           вместе с кнопками из MAIN_KEYBOARD в v1.2.0.
-Решение:   Константы восстановлены в BTN (не в MAIN_KEYBOARD).
+Описание:  Бот падал при старте — константы BTN.GUIDES/SCREENSHOTS/MEMES удалены.
+Решение:   Константы восстановлены в BTN.
 Файлы:     bot/keyboards/main_menu.py
 ```
 
@@ -117,9 +121,7 @@ ID:        AUD-005
 Дата:      2026-07-02
 Статус:    исправлен
 Приоритет: low
-Описание:  requirements.txt содержал повторный блок из 7 зависимостей.
 Решение:   Дубликаты удалены.
-Файлы:     requirements.txt
 ```
 
 ---
@@ -131,9 +133,7 @@ ID:        AUD-006
 Дата:      2026-07-02
 Статус:    исправлен
 Приоритет: low
-Описание:  Локальная константа _SUPERUSER дублировала _SUPERUSER_ID.
 Решение:   Локальная константа удалена.
-Файлы:     bot/handlers/members.py
 ```
 
 ---

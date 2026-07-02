@@ -11,7 +11,7 @@ from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
 from bot.services.user_service import UserService
 from bot.utils.roles import assignable_roles, can_assign, role_label
-from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
+from bot.utils.sync_title import build_admin_title, sync_admin_title
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ async def handle_setrole(
     if tg_error:
         tg_note = f"\n\n{tg_error}"
     else:
-        tg_note = f"\n\n✅ Telegram-титул установлен: «{ADMIN_TITLES[confirmed]}»"
+        tg_note = f"\n\n✅ Telegram-титул установлен: «{build_admin_title(confirmed, target_nick)}»"
 
     await message.answer(
         f"✅ Роль успешно изменена.\n\n"

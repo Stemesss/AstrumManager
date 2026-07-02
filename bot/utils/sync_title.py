@@ -55,57 +55,44 @@ _ROLE_SYMBOLS: dict[UserRole, str] = {
     UserRole.MEMBER:     "◇",
 }
 
-_SEP = " — "
 _MAX_LEN = 16
 
-# Кастомные титулы без ника (фоллбэк + источник истины для отображения в UI)
-# Все 4 роли поддерживаются. Используется в handlers для показа установленного титула.
+# Символы для отображения роли в UI (без ника — фоллбэк, если ник не известен)
+# Используется в handlers для показа установленного титула.
 ADMIN_TITLES: dict[UserRole, str] = {
-    UserRole.LEADER:     "✪ Лидер",
-    UserRole.CLAN_CHILD: "✦ Дитя клана",
-    UserRole.ELDER:      "✧ Старейшина",
-    UserRole.MEMBER:     "◇ Участник",
+    UserRole.LEADER:     "✪",
+    UserRole.CLAN_CHILD: "✦",
+    UserRole.ELDER:      "✧",
+    UserRole.MEMBER:     "◇",
 }
 
 
 def build_admin_title(role: UserRole, game_nick: str | None = None) -> str:
     """Строит строку кастомного Telegram-титула (≤ 16 символов).
 
-    Формат: «{symbol} {game_nick} — {role_label}»
-    Источник имени — только game_nick (Telegram username не используется).
+    Формат: «{symbol} {game_nick}»
+    Источник имени — только game_nick из БД (Telegram username не используется).
 
     Примеры (game_nick="Вадим"):
-      LEADER     → "✪ Вадим — Лидер"      (15 символов ✓)
-      CLAN_CHILD → "✦ В — Дитя клана"     (16 символов, ник усечён до 1)
-      ELDER      → "✧ В — Старейшина"     (16 символов, ник усечён до 1)
-      MEMBER     → "◇ Вад — Участник"     (16 символов, ник усечён до 3)
+      LEADER     → "✪ Вадим"   (7 символов ✓)
+      CLAN_CHILD → "✦ Вадим"   (7 символов ✓)
+      ELDER      → "✧ Вадим"   (7 символов ✓)
+      MEMBER     → "◇ Вадим"   (7 символов ✓)
 
-    Если ник не помещается даже в 1 символ — «{symbol} {label}» без ника:
-      CLAN_CHILD (без ника) → "✦ Дитя клана"   (12 символов ✓)
+    При смене роли меняется только символ.
+    При смене ника меняется только текст после символа.
+    Если ник не передан — возвращает только символ.
+    Длинный ник усекается до 14 символов (symbol + space = 2 символа).
     """
     symbol = _ROLE_SYMBOLS.get(role)
     if not symbol:
         return ""
 
-    label = role.value  # "Лидер" / "Дитя клана" / "Старейшина" / "Участник"
-
     if not game_nick:
-        return f"{symbol} {label}"[:_MAX_LEN]
+        return symbol
 
-    prefix = f"{symbol} "
-    suffix = f"{_SEP}{label}"
-    full = f"{prefix}{game_nick}{suffix}"
-
-    if len(full) <= _MAX_LEN:
-        return full
-
-    # Усекаем ник чтобы вписаться в 16 символов
-    max_nick_len = _MAX_LEN - len(prefix) - len(suffix)
-    if max_nick_len >= 1:
-        return f"{prefix}{game_nick[:max_nick_len]}{suffix}"
-
-    # Ник вообще не помещается — только symbol + label
-    return f"{symbol} {label}"[:_MAX_LEN]
+    title = f"{symbol} {game_nick}"
+    return title[:_MAX_LEN]
 
 
 async def sync_admin_title(

@@ -5,43 +5,36 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.2.5] — 2026-07-02 — Упрощение формата Telegram custom_title
+
+### Изменено (финальная корректировка)
+- `bot/utils/sync_title.py`:
+  - `build_admin_title` упрощён: новый формат `{symbol} {game_nick}` (без текста роли).
+  - Удалена константа `_SEP = " — "` (больше не используется).
+  - `ADMIN_TITLES` обновлён: значения теперь только символы (`✪`, `✦`, `✧`, `◇`).
+  - При смене роли меняется только символ слева.
+  - При смене ника меняется только текст после символа.
+  - Длинный ник усекается до 14 символов (2 символа занимают `{symbol} `).
+- `bot/handlers/setrole.py`:
+  - Импорт обновлён: `ADMIN_TITLES` → `build_admin_title`.
+  - `tg_note` теперь строится через `build_admin_title(confirmed, target_nick)`.
+
 ## [1.2.4] — 2026-07-02 — Исправление генерации Telegram custom_title
 
 ### Исправлено (дефект AUD-007)
-- `bot/utils/sync_title.py` — полностью переписан `build_admin_title`:
-  - Удалён старый формат «Воин | Ник» и весь связанный код (`_TITLE_BASE`, старый `_SEP = " | "`).
-  - Новый формат: `{symbol} {game_nick} — {role_label}` (≤ 16 символов).
-  - Символы: ✪ Лидер / ✦ Дитя клана / ✧ Старейшина / ◇ Участник.
-  - Источник имени — только `game_nick` из БД. Telegram username/first_name не используются.
-  - При смене роли меняется только символ слева; при смене ника — только текст справа.
-  - Если ник не помещается в 16 символов — усекается; если 1 символ не помещается — ник опускается.
-  - `ADMIN_TITLES` расширен до всех 4 ролей (включая MEMBER): `◇ Участник`.
-  - `sync_admin_title` — MEMBER теперь тоже получает кастомный титул (promote + setChatAdministratorCustomTitle).
-  - Старая ветка «снять административный статус для MEMBER» удалена.
-  - Обновлён docstring с документацией ограничения 16 символов для каждой роли.
-
-### Изменено
-- `bot/handlers/nick.py` — `_try_sync_title`: убрана проверка `if role not in ADMIN_TITLES`
-  (теперь все роли получают custom_title). Удалён неиспользуемый импорт `ADMIN_TITLES`.
-- `bot/handlers/setrole.py` — `sync_admin_title` теперь передаёт `game_nick=target_nick`
-  (имя уже было в переменной, просто не передавалось). Упрощена ветка tg_note
-  (удалена мертвая ветка «Telegram-титул снят (роль Участник)»).
-- `bot/handlers/group_nick.py` — убрана проверка `if role in ADMIN_TITLES:`
-  (sync_admin_title вызывается для всех ролей). Удалён неиспользуемый импорт `ADMIN_TITLES`.
-- `bot/handlers/members.py` — упрощена ветка tg_note (удалена мёртвая ветка
-  «Telegram-титул снят»). Удалён неиспользуемый импорт `ADMIN_TITLES`.
-
-### Проверено (без изменений)
-- `bot/utils/nick_format.py` — `build_full_nick` не затронут (отображаемый ник в боте не изменился).
-- `bot/utils/roles.py` — `ROLE_DISPLAY_ICONS` не затронут.
-- Синтаксическая проверка + проверка импортов: все 5 файлов OK.
-- Бот запущен чисто: webhook зарегистрирован, HTTP 200, ошибок импорта нет.
+- `bot/utils/sync_title.py` — переписан `build_admin_title`:
+  - Удалён формат «Воин | Ник». Введён формат «{symbol} {nick} — {role}».
+  - `ADMIN_TITLES` расширен до всех 4 ролей (включая MEMBER).
+  - `sync_admin_title` — MEMBER теперь получает кастомный титул.
+- `bot/handlers/nick.py` — убрана проверка `if role not in ADMIN_TITLES`.
+- `bot/handlers/setrole.py` — `sync_admin_title` теперь передаёт `game_nick`.
+- `bot/handlers/group_nick.py` — убрана проверка `if role in ADMIN_TITLES`.
+- `bot/handlers/members.py` — убрана мёртвая ветка «Telegram-титул снят».
 
 ## [1.2.3] — 2026-07-02 — Финальная настройка окружения и постоянный цикл сохранения
 
 ### Изменено (инфраструктура, не функциональность бота)
-- `scripts/push.sh` — поддержка двух имён токена: GITHUB_TOKEN (приоритет)
-  и AstrumManagerMain (fallback). Ручная настройка более не требуется.
+- `scripts/push.sh` — поддержка двух имён токена: GITHUB_TOKEN / AstrumManagerMain.
 - `AGENT_START.md` — добавлен «ОБЯЗАТЕЛЬНЫЙ ЦИКЛ СОХРАНЕНИЯ».
 - `replit.md` — обновлены User preferences.
 - `.agents/memory/dev_rules.md` — добавлен раздел «Обязательный цикл».
@@ -62,18 +55,3 @@ description: Журнал изменений — обновляется посл
 
 ### Изменено
 - Новая раскладка главного меню 5×2.
-
-## [1.1.0] — 2026-07-02 — Полировка раздела «Участники»
-
-### Изменено
-- Иконки ролей и порядок ROLE_ORDER.
-
-## [1.0.2] — 2026-07-02 — Безопасность webhook
-
-### Добавлено
-- `webhook_secret` в Config + set_webhook.
-
-## [1.0.1] — 2026-07-02 — Git-скрипты
-
-### Добавлено
-- `scripts/push.sh`, `scripts/pull.sh`
