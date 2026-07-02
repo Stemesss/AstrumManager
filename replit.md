@@ -68,6 +68,7 @@ A Python Telegram bot for clan management, built with aiogram 3, running in webh
 - Итоговый отчёт — один текстовый блок в обязательном формате (см. AGENT_START.md): ЗАДАНИЕ / СТАТУС / ВЕРСИЯ / ЭТАП / ИЗМЕНЕНИЯ / ФАЙЛЫ / ПРОВЕРКА / ТЕСТЫ / WORKFLOW / GIT / GITHUB / ПАМЯТЬ / ИТОГ.
 - Если push НЕ выполнен — запрещено писать «СТАТУС: выполнено».
 - scripts/push.sh поддерживает два имени токена: GITHUB_TOKEN и AstrumManagerMain (приоритет у GITHUB_TOKEN).
+- Итоговый отчёт — ВСЕГДА один блок ```text``` (для кнопки «Копировать» в интерфейсе Replit), строго в формате: ЗАДАНИЕ / СТАТУС / ВЕРСИЯ / ЭТАП / ИЗМЕНЕНИЯ / ФАЙЛЫ / ПРОВЕРКА / ТЕСТЫ / WORKFLOW / GIT / GITHUB / ПАМЯТЬ / ИТОГ. Без markdown/HTML-таблиц и списков сравнения — это правило действует всегда, включая диагностику и read-only проверки (см. `.agents/memory/dev_rules.md`, раздел 8).
 
 ## Pointers
 
