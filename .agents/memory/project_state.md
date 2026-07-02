@@ -9,7 +9,7 @@ description: Текущий статус проекта, версия, этап 
 
 ```
 STATUS:   STABLE
-VERSION:  1.0
+VERSION:  1.1
 DATE:     2026-07-02
 PLATFORM: Replit
 ```
@@ -30,10 +30,11 @@ PLATFORM: Replit
 | Этап 2 | High | ✅ завершён |
 | Этап 3 | Medium | ✅ завершён |
 | Этап 4 | Low | ✅ завершён |
+| Полировка участников | Low | ✅ завершён |
 
 ## Последнее задание
 
-Создание scripts/push.sh и scripts/pull.sh; обновление replit.md и PROJECT_HISTORY.md.
+Финальная полировка раздела «Участники»: новый порядок ролей, иконки 👑🛡⭐👤, убрана ⚙️-кнопка, фильтр по game_nick.
 
 ## Следующий этап
 
@@ -49,5 +50,6 @@ PLATFORM: Replit
 ## Переменные окружения
 
 - `TELEGRAM_BOT_TOKEN` — ✅ установлен (Replit Secrets)
+- `WEBHOOK_SECRET` — ✅ установлен (Replit Secrets) или auto-generated
 - `WEBHOOK_BASE_URL` — не установлен (используется `REPLIT_DOMAINS`)
 - `WEBHOOK_PORT` — не установлен (default: 6000)

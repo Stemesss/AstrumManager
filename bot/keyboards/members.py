@@ -8,10 +8,10 @@ from bot.utils.roles import ROLE_ORDER, assignable_roles
 PAGE_SIZE = 10
 
 _ICONS: dict[UserRole, str] = {
-    UserRole.LEADER:     "✪",
-    UserRole.CLAN_CHILD: "✦",
-    UserRole.ELDER:      "✧",
-    UserRole.MEMBER:     "◇",
+    UserRole.LEADER:     "👑",
+    UserRole.ELDER:      "🛡",
+    UserRole.CLAN_CHILD: "⭐",
+    UserRole.MEMBER:     "👤",
 }
 
 
@@ -69,15 +69,11 @@ def members_list_kb(users: list[User], page: int, total: int) -> InlineKeyboardM
     rows: list[list[InlineKeyboardButton]] = []
 
     for u in users:
-        icon = _ICONS.get(u.role, "◇")
+        icon = _ICONS.get(u.role, "👤")
         name = u.game_nick or u.first_name
         rows.append([
             InlineKeyboardButton(
                 text=f"{icon} {name}",
-                callback_data=MemberBtn.card(u.telegram_id),
-            ),
-            InlineKeyboardButton(
-                text="⚙️",
                 callback_data=MemberBtn.card(u.telegram_id),
             ),
         ])

@@ -56,10 +56,10 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 _ICONS: dict[UserRole, str] = {
-    UserRole.LEADER:     "✪",
-    UserRole.CLAN_CHILD: "✦",
-    UserRole.ELDER:      "✧",
-    UserRole.MEMBER:     "◇",
+    UserRole.LEADER:     "👑",
+    UserRole.ELDER:      "🛡",
+    UserRole.CLAN_CHILD: "⭐",
+    UserRole.MEMBER:     "👤",
 }
 
 _SUPERUSER_ID = 8490615925
@@ -124,7 +124,8 @@ async def _show_menu(cb: CallbackQuery) -> None:
 
 
 async def _show_list(cb: CallbackQuery, user_service: UserService, page: int) -> None:
-    all_users = _sort_users(await user_service.get_all_users())
+    # Показываем только участников с установленным игровым ником
+    all_users = _sort_users([u for u in await user_service.get_all_users() if u.game_nick])
     total = len(all_users)
     page_users = all_users[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
     text = f"👥 <b>Участники клана</b>\n\nВсего: {total}\n\nВыберите участника:"

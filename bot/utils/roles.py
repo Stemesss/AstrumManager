@@ -21,8 +21,8 @@ ROLE_DISPLAY_ICONS: dict[UserRole, str] = {
 # Порядок ролей по убыванию старшинства
 ROLE_ORDER: list[UserRole] = [
     UserRole.LEADER,
-    UserRole.CLAN_CHILD,
     UserRole.ELDER,
+    UserRole.CLAN_CHILD,
     UserRole.MEMBER,
 ]
 
