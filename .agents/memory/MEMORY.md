@@ -3,3 +3,9 @@
 - [Git operations in main agent](git-ops.md) — git commit/add are blocked in main agent; only git push (no force) is allowed after checkpoint auto-creates the commit
 - [UserService injection](userservice-injection.md) — UserService injected via dp["user_service"] in build_dispatcher(); handlers receive it as a typed kwarg
 - [Smoke test false errors](smoke-test-errors.md) — TelegramBadRequest "chat not found" in logs after smoke tests is expected; fake chat IDs can't receive replies
+- [Nick format and storage](nick-format.md) — game_nick stores name only; full nick computed via build_full_nick(name, role); separator U+FF5C
+- [Project state](project_state.md) — current status, version, running workflows; updated after every task
+- [Change log](change_log.md) — chronological list of all changes; updated after every task
+- [Audit log](audit.md) — found and fixed defects; updated when bug is found or fixed
+- [Workflow](workflow.md) — development SOP, stage tracker, Replit workflow status
+- [Dev rules](dev_rules.md) — mandatory coding rules: webhook-only, DI pattern, nick format, role titles, forbidden patterns

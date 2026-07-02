@@ -1,6 +1,10 @@
-# Telegram Bot
+# AstrumManager — Telegram Bot
 
-A Python Telegram bot built with aiogram 3, running in webhook mode on Replit and Railway, with polling fallback for local development.
+**VERSION: 1.0 | STATUS: STABLE**
+
+> Читать перед работой: [`AGENT_START.md`](AGENT_START.md)
+
+A Python Telegram bot for clan management, built with aiogram 3, running in webhook mode on Replit and Railway, with polling fallback for local development.
 
 ## Run & Operate
 
@@ -10,17 +14,19 @@ A Python Telegram bot built with aiogram 3, running in webhook mode on Replit an
 
 ## Stack
 
-- **Bot:** Python 3.11, aiogram 3, aiohttp
+- **Bot:** Python 3.11, aiogram 3, aiohttp, aiosqlite
 - **Proxy:** Node.js 24, Express 5, http-proxy-middleware
 - **Workspace:** pnpm monorepo, TypeScript 5.9
 
 ## Where things live
 
 - `main.py` — single entry point; runs webhook mode on Replit/Railway, polling locally
-- `bot/config.py` — loads `TELEGRAM_BOT_TOKEN` from env
-- `bot/handlers/common.py` — /start, /help, /about commands
-- `bot/handlers/echo.py` — /echo command + fallback handler
+- `bot/config/settings.py` — Config dataclass, load_config
+- `bot/handlers/` — one file per section (admin, news, nick, members, etc.)
+- `bot/services/` — UserService, AuditService, StatsService, NewsService, TopicService
+- `bot/database/db.py` — Database class (aiosqlite, WAL mode)
 - `bot/middlewares/logging.py` — logs every incoming update
+- `bot/middlewares/nick_gate.py` — blocks unregistered users
 - `artifacts/api-server/src/routes/telegram.ts` — proxies `/api/telegram/webhook` → Python bot on port 6000
 
 ## Architecture decisions
@@ -29,6 +35,7 @@ A Python Telegram bot built with aiogram 3, running in webhook mode on Replit an
 - **Two-process design:** The Python bot (aiohttp, port 6000) runs alongside a Node.js Express server (port 8080). Express proxies `/api/telegram/webhook` to the Python bot so Telegram can reach it through the shared Replit proxy.
 - **Auto-detection in main.py:** `resolve_public_host()` checks `WEBHOOK_BASE_URL` → `REPLIT_DOMAINS` → `RAILWAY_PUBLIC_DOMAIN` in order. Falls back to polling if none is set (useful for local dev).
 - **Port on Railway:** `main.py` respects `$PORT` (Railway's injected port) first, then `$WEBHOOK_PORT`, then defaults to 6000.
+- **Scores on-the-fly:** Activity points computed from `audit_log`, not stored separately. Formula: news_create=5, guide_create=10, screenshot_upload=2, event_create=8.
 
 ## Environment variables
 
@@ -51,8 +58,12 @@ A Python Telegram bot built with aiogram 3, running in webhook mode on Replit an
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- После каждого задания агент обязан автоматически обновлять файлы памяти проекта без отдельной команды.
+- После каждого завершённого задания — git commit с осмысленным сообщением и push.
+- Итоговый отчёт — один текстовый блок без таблиц в стандартном формате (см. AGENT_START.md).
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- See [`AGENT_START.md`](AGENT_START.md) for mandatory reading order before any work
+- See [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) for full stage history
+- See `.agents/memory/` for all agent memory files
