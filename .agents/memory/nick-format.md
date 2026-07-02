@@ -6,21 +6,23 @@ description: How game nicks are stored and displayed — separate name vs full f
 ## Storage model
 
 `game_nick` DB column stores **only the name part** (e.g., "Вадим").
-Full displayed nick is **computed on the fly**: `build_full_nick(name, role)` → "🌟 Рекрут｜Вадим".
+Full displayed nick is **computed on the fly**: `build_full_nick(name, role)` → "✪ Вадим".
 
-**Why:** When a user's role changes, the title prefix updates automatically — no DB write needed.
+**Why:** When a user's role changes, the symbol prefix updates automatically — no DB write needed.
 
-## Title mapping (bot/utils/nick_format.py)
+## Symbol mapping (bot/utils/nick_format.py, sourced from bot.utils.roles.ROLE_DISPLAY_ICONS)
 
 ```
-ROLE_NICK_TITLES:
-  LEADER     → "👑 Лидер"
-  CLAN_CHILD → "⚔️ Воин"
-  ELDER      → "🛡️ Старейшина"
-  MEMBER     → "🌟 Рекрут"
+LEADER     → "✪"
+CLAN_CHILD → "✦"
+ELDER      → "✧"
+MEMBER     → "◇"
 ```
 
-Separator: `｜` (U+FF5C fullwidth vertical line, not `|`)
+As of v1.2.8, the full nick is just `"{symbol} {name}"` — no role word, no separator, no
+"Рекрут"/"Воин" legacy titles anywhere in the project. This symbol scheme (✪ ✦ ✧ ◇) is the
+single source of truth for role display in registration, profile, member cards, nick previews,
+group messages, and Telegram custom_title — enforced everywhere via `ROLE_DISPLAY_ICONS`.
 
 ## How to apply
 

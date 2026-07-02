@@ -3,16 +3,11 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.models.user import User, UserRole
-from bot.utils.roles import assignable_roles
+from bot.utils.roles import ROLE_DISPLAY_ICONS, assignable_roles
 
 PAGE_SIZE = 10
 
-_ICONS: dict[UserRole, str] = {
-    UserRole.LEADER:     "👑",
-    UserRole.ELDER:      "🛡",
-    UserRole.CLAN_CHILD: "⭐",
-    UserRole.MEMBER:     "👤",
-}
+_ICONS: dict[UserRole, str] = ROLE_DISPLAY_ICONS
 
 
 class MemberBtn:
@@ -28,6 +23,7 @@ class MemberBtn:
     CLEAN_ABSENT_OK = "mem:clean_absent_ok"
     NICK_REPORT     = "mem:nick_report"
     NICK_REMIND     = "mem:nick_remind"
+    SYNC_TITLES     = "mem:sync_titles"
 
     @staticmethod
     def list(page: int) -> str:
@@ -65,6 +61,7 @@ def members_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📋 Детальный отчёт",         callback_data=MemberBtn.NICK_REPORT)],
         [InlineKeyboardButton(text="🧹 Очистить отсутствующих",  callback_data=MemberBtn.CLEAN_ABSENT)],
         [InlineKeyboardButton(text="🗑️ Удалить участника",       callback_data=MemberBtn.del_list(0))],
+        [InlineKeyboardButton(text="🔄 Полная синхронизация",    callback_data=MemberBtn.SYNC_TITLES)],
         [InlineKeyboardButton(text="🔄 Новый сезон",             callback_data=MemberBtn.SEASON)],
         [InlineKeyboardButton(text="❌ Закрыть",                 callback_data=MemberBtn.CLOSE)],
     ])
@@ -200,11 +197,12 @@ def view_card_kb(user_id: int, page: int = 0) -> InlineKeyboardMarkup:
 
 
 def member_card_kb(user_id: int, page: int = 0) -> InlineKeyboardMarkup:
-    """Кнопки карточки участника."""
+    """Кнопки карточки участника (администрирование)."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🏷 Изменить роль", callback_data=MemberBtn.role(user_id))],
-        [InlineKeyboardButton(text="📊 Статистика",    callback_data=MemberBtn.stats(user_id))],
-        [InlineKeyboardButton(text="⬅️ Назад",         callback_data=MemberBtn.list(page))],
+        [InlineKeyboardButton(text="🏷 Изменить роль",   callback_data=MemberBtn.role(user_id))],
+        [InlineKeyboardButton(text="📊 Статистика",      callback_data=MemberBtn.stats(user_id))],
+        [InlineKeyboardButton(text="🗑 Удалить участника", callback_data=MemberBtn.del_card(user_id))],
+        [InlineKeyboardButton(text="⬅️ Назад",           callback_data=MemberBtn.list(page))],
     ])
 
 

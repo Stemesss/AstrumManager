@@ -62,19 +62,16 @@ from bot.services.audit_service import AuditService
 from bot.services.stats_service import StatsService
 from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
+from bot.handlers.synctitles import run_sync_titles
 from bot.states.members import MemberDelete
-from bot.utils.roles import ROLE_ORDER, assignable_roles, can_assign, role_label
+from bot.utils.roles import ROLE_DISPLAY_ICONS, ROLE_ORDER, assignable_roles, can_assign, role_label
 from bot.utils.sync_title import build_admin_title, sync_admin_title
+from bot.utils.text import pluralize_days
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-_ICONS: dict[UserRole, str] = {
-    UserRole.LEADER:     "👑",
-    UserRole.ELDER:      "🛡",
-    UserRole.CLAN_CHILD: "⭐",
-    UserRole.MEMBER:     "👤",
-}
+_ICONS: dict[UserRole, str] = ROLE_DISPLAY_ICONS
 
 _SUPERUSER_ID = 8490615925
 
@@ -104,14 +101,18 @@ def _effective_role(actor_id: int, actor_role: UserRole) -> UserRole:
     return UserRole.LEADER if actor_id == _SUPERUSER_ID else actor_role
 
 
-def _card_text(u: User) -> str:
+async def _card_text(u: User, user_service: UserService) -> str:
     icon = _ICONS.get(u.role, "◇")
-    username_line = f"@{u.username}" if u.username else "(без юзернейма)"
+    username_line = f"@{u.username}" if u.username else "—"
+    days = await user_service.get_days_in_clan(u.telegram_id)
     return (
-        f"👤 <b>{_display_name(u)}</b>\n\n"
-        f"Текущая роль:\n{icon} {u.role.value}\n\n"
-        f"Telegram:\n{username_line}\n\n"
-        f"ID:\n<code>{u.telegram_id}</code>"
+        f"👤 <b>{_display_name(u)}</b>\n"
+        f"{icon} {u.role.value}\n\n"
+        f"🎮 <b>Игровой ник:</b> {u.game_nick or '—'}\n"
+        f"📱 <b>Telegram:</b> {username_line}\n"
+        f"🆔 <b>ID:</b> <code>{u.telegram_id}</code>\n"
+        f"📅 <b>В клане:</b> {pluralize_days(days)}\n\n"
+        "🟢 Активен"
     )
 
 
@@ -215,10 +216,11 @@ async def cb_memv_card(callback: CallbackQuery, user_service: UserService) -> No
         await callback.answer("Участник не найден.", show_alert=True)
         return
     await callback.answer()
+    text = await _card_text(u, user_service)
     try:
-        await callback.message.edit_text(_card_text(u), reply_markup=view_card_kb(user_id, page))
+        await callback.message.edit_text(text, reply_markup=view_card_kb(user_id, page))
     except Exception:
-        await callback.message.answer(_card_text(u), reply_markup=view_card_kb(user_id, page))
+        await callback.message.answer(text, reply_markup=view_card_kb(user_id, page))
 
 
 @router.callback_query(F.data == MemberViewBtn.NOOP)
@@ -304,7 +306,8 @@ async def cb_mem_card(callback: CallbackQuery, user_service: UserService) -> Non
         await callback.answer("Участник не найден.", show_alert=True)
         return
     await callback.answer()
-    await callback.message.edit_text(_card_text(u), reply_markup=member_card_kb(user_id))
+    text = await _card_text(u, user_service)
+    await callback.message.edit_text(text, reply_markup=member_card_kb(user_id))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -398,7 +401,7 @@ async def cb_mem_set(
         tg_note = f"\n\n✅ Telegram-титул установлен: «{actual_title}»"
 
     u = await _find_user(user_service, target_id)
-    card = f"\n\n{_card_text(u)}" if u else ""
+    card = f"\n\n{await _card_text(u, user_service)}" if u else ""
 
     await callback.answer(f"✅ {icon} {confirmed.value}", show_alert=False)
     await callback.message.edit_text(
@@ -738,6 +741,31 @@ async def cb_mem_season_ok(
         await callback.message.edit_text(report, reply_markup=members_menu_kb())
     except Exception:
         await callback.message.answer(report, reply_markup=members_menu_kb())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Полная синхронизация Telegram-титулов (кнопка = логика команды /synctitles)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == MemberBtn.SYNC_TITLES)
+async def cb_mem_sync_titles(
+    callback: CallbackQuery,
+    user_service: UserService,
+    audit_service: AuditService,
+    bot: Bot,
+    group_chat_id: int,
+) -> None:
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    await run_sync_titles(
+        actor_id=callback.from_user.id,
+        reply=callback.message.answer,
+        user_service=user_service,
+        audit_service=audit_service,
+        bot=bot,
+        group_chat_id=group_chat_id,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

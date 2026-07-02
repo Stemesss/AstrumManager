@@ -2,27 +2,25 @@
 """
 Форматирование игрового ника участника клана.
 
-Формат: <Титул>｜<Имя>
-Пример: 🌟 Рекрут｜Вадим
+Формат: <Символ роли> <Имя>
+Пример: ✪ Stemes, ✦ Dragon, ✧ Shadow, ◇ Player
+
+Символы соответствуют единой схеме ролей всего проекта
+(см. bot.utils.roles.ROLE_DISPLAY_ICONS):
+  ✪ — Лидер
+  ✦ — Дитя клана
+  ✧ — Старейшина
+  ◇ — Участник
 
 Публичный API:
-  ROLE_NICK_TITLES          — маппинг роль → текст титула
-  build_full_nick(name, role) → "🌟 Рекрут｜Вадим"
+  build_full_nick(name, role) → "✪ Stemes"
   validate_name(text)        → (cleaned_name | None, error_msg | None)
 """
 import re
 import unicodedata
 
 from bot.models.user import UserRole
-
-SEPARATOR = "｜"
-
-ROLE_NICK_TITLES: dict[UserRole, str] = {
-    UserRole.LEADER:     "👑 Лидер",
-    UserRole.CLAN_CHILD: "⚔️ Воин",
-    UserRole.ELDER:      "🛡️ Старейшина",
-    UserRole.MEMBER:     "🌟 Рекрут",
-}
+from bot.utils.roles import ROLE_DISPLAY_ICONS
 
 NAME_MIN = 3
 NAME_MAX = 20
@@ -33,10 +31,10 @@ _ALLOWED_RE = re.compile(r"^[\w\s\-]+$", re.UNICODE)
 def build_full_nick(name: str, role: UserRole) -> str:
     """Строит отображаемый ник по имени и роли.
 
-    Пример: build_full_nick("Вадим", UserRole.MEMBER) → "🌟 Рекрут｜Вадим"
+    Пример: build_full_nick("Stemes", UserRole.LEADER) → "✪ Stemes"
     """
-    title = ROLE_NICK_TITLES.get(role, "🌟 Рекрут")
-    return f"{title}{SEPARATOR}{name}"
+    symbol = ROLE_DISPLAY_ICONS.get(role, "◇")
+    return f"{symbol} {name}"
 
 
 def _has_emoji(text: str) -> bool:

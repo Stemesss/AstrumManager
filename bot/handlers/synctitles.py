@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Команда /synctitles — массовая синхронизация Telegram Admin Title.
+Массовая синхронизация Telegram Admin Title.
+
+Доступна двумя способами (используют одну и ту же логику run_sync_titles):
+  • команда /synctitles
+  • кнопка «🔄 Полная синхронизация» в меню «Участники»
 
 Доступ: только администраторы (Лидер, Дитя клана, Старейшина).
 
@@ -13,6 +17,7 @@
 """
 import asyncio
 import logging
+from typing import Awaitable, Callable
 
 from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
@@ -30,23 +35,25 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 
-@router.message(Command("synctitles"))
-async def cmd_sync_titles(
-    message: Message,
+async def run_sync_titles(
+    *,
+    actor_id: int,
+    reply: Callable[[str], Awaitable[Message]],
     user_service: UserService,
     audit_service: AuditService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
-    """Массовая синхронизация Telegram Admin Title для всех участников клана."""
-    if not message.from_user:
-        return
+    """Общая логика массовой синхронизации Telegram Admin Title.
 
-    actor_id = message.from_user.id
+    Args:
+        actor_id: telegram_id инициатора синхронизации.
+        reply:    функция отправки сообщения (message.answer или callback.message.answer).
+    """
     actor_role = await user_service.get_role(actor_id)
 
     if actor_role not in UserRole.admin_roles():
-        await message.answer(
+        await reply(
             "🔒 <b>Доступ запрещён.</b>\n"
             "Команда доступна только администраторам клана."
         )
@@ -56,10 +63,10 @@ async def cmd_sync_titles(
     users_with_nick = [u for u in all_users if u.game_nick]
 
     if not users_with_nick:
-        await message.answer("👥 Нет участников с игровым ником для синхронизации.")
+        await reply("👥 Нет участников с игровым ником для синхронизации.")
         return
 
-    progress_msg = await message.answer(
+    progress_msg = await reply(
         f"⏳ <b>Синхронизация Telegram-титулов...</b>\n\n"
         f"Обрабатываю {len(users_with_nick)} участников, подождите..."
     )
@@ -146,7 +153,7 @@ async def cmd_sync_titles(
         ),
     )
     logger.info(
-        "/synctitles: actor=%s synced=%d skipped_creator=%d skipped_absent=%d errors=%d",
+        "synctitles: actor=%s synced=%d skipped_creator=%d skipped_absent=%d errors=%d",
         actor_id, len(synced), len(skipped_creator), len(skipped_no_member), len(errors),
     )
 
@@ -185,4 +192,26 @@ async def cmd_sync_titles(
     try:
         await progress_msg.edit_text(report)
     except Exception:
-        await message.answer(report)
+        await reply(report)
+
+
+@router.message(Command("synctitles"))
+async def cmd_sync_titles(
+    message: Message,
+    user_service: UserService,
+    audit_service: AuditService,
+    bot: Bot,
+    group_chat_id: int,
+) -> None:
+    """Массовая синхронизация Telegram Admin Title для всех участников клана."""
+    if not message.from_user:
+        return
+
+    await run_sync_titles(
+        actor_id=message.from_user.id,
+        reply=message.answer,
+        user_service=user_service,
+        audit_service=audit_service,
+        bot=bot,
+        group_chat_id=group_chat_id,
+    )

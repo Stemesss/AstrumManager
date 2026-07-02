@@ -19,10 +19,20 @@ logger = logging.getLogger(__name__)
 
 _MSK = timezone(timedelta(hours=3))
 
+# Вступительное приветствие — показывается один раз, до начала регистрации
+_WELCOME_INTRO = (
+    "👋 <b>Добро пожаловать в Astrum!</b>\n\n"
+    "🤖 <b>AstrumManager</b> — бот-помощник клана. С ним ты сможешь:\n"
+    "📰 быть в курсе новостей и событий\n"
+    "👥 видеть список участников клана\n"
+    "📊 следить за своей статистикой и активностью\n"
+    "📚 пользоваться гайдами и другими разделами клана\n\n"
+    "🎮 Чтобы клан узнавал тебя в списках и статистике, нужно "
+    "задать <b>игровое имя</b> — это займёт меньше минуты."
+)
+
 # Приглашение к первичной настройке профиля
 _SETUP_WELCOME = (
-    "👋 <b>Добро пожаловать в Astrum!</b>\n\n"
-    "Перед началом необходимо настроить ваш профиль.\n\n"
     "🎮 <b>Введите ваше игровое имя:</b>\n\n"
     "• от 3 до 20 символов\n"
     "• только буквы, цифры, пробел, дефис\n"
@@ -68,11 +78,22 @@ async def handle_start(
     deep_join = (command.args or "").strip().lower() == "join"
     user, is_new = await user_service.register_if_new(message.from_user)
 
-    # ── Новый пользователь → мастер первичной настройки ─────────────────────
-    if is_new or deep_join:
+    # ── Новый пользователь → приветствие, затем мастер первичной настройки ──
+    if is_new:
         logger.info(
-            "Новый участник %s (deep_join=%s) — запуск мастера настройки профиля",
-            user.telegram_id, deep_join,
+            "Новый участник %s — показ приветствия и запуск мастера настройки профиля",
+            user.telegram_id,
+        )
+        await message.answer(_WELCOME_INTRO)
+        await state.set_state(NickSetup.waiting_name)
+        await message.answer(_SETUP_WELCOME)
+        return
+
+    # ── Переход по deep-link «join» → мастер первичной настройки ─────────────
+    if deep_join:
+        logger.info(
+            "Участник %s перешёл по deep-link join — запуск мастера настройки профиля",
+            user.telegram_id,
         )
         await state.set_state(NickSetup.waiting_name)
         await message.answer(_SETUP_WELCOME)
