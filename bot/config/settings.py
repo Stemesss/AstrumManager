@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Загрузка конфигурации из переменных окружения."""
 import os
+import secrets
 from dataclasses import dataclass, field
 
 
@@ -10,6 +11,7 @@ class Config:
     db_path: str      = field(default="data/astrum.db")       # Путь к SQLite
     owner_id: int | None = field(default=None)                # Telegram ID владельца
     group_chat_id: int = field(default=-1004463841801)        # Группа Astrum
+    webhook_secret: str = field(default_factory=lambda: secrets.token_hex(32))  # Секрет вебхука
 
 
 def load_config() -> Config:
@@ -42,9 +44,12 @@ def load_config() -> Config:
                 f"GROUP_CHAT_ID должен быть числом, получено: {raw_chat!r}"
             )
 
+    webhook_secret = os.getenv("WEBHOOK_SECRET", "").strip() or secrets.token_hex(32)
+
     return Config(
         bot_token=token,
         db_path=db_path,
         owner_id=owner_id,
         group_chat_id=group_chat_id,
+        webhook_secret=webhook_secret,
     )

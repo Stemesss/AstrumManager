@@ -68,7 +68,7 @@ async def _check_topics_on_startup(dp: Dispatcher) -> None:
 
 
 async def on_startup(
-    bot: Bot, db: Database, dp: Dispatcher, webhook_url: str, **_kwargs
+    bot: Bot, db: Database, dp: Dispatcher, webhook_url: str, webhook_secret: str, **_kwargs
 ) -> None:
     import datetime
     logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ async def on_startup(
     dp["bot_username"] = me.username or ""
     allowed = dp.resolve_used_update_types()
     logger.info("Регистрация вебхука → %s  (allowed_updates=%s)", webhook_url, allowed)
-    await bot.set_webhook(webhook_url, allowed_updates=allowed, drop_pending_updates=True)
+    await bot.set_webhook(webhook_url, allowed_updates=allowed, drop_pending_updates=True, secret_token=webhook_secret)
     logger.info("Вебхук успешно зарегистрирован")
 
 
@@ -177,19 +177,19 @@ def build_dispatcher(
     return dp
 
 
-def run_webhook(bot: Bot, dp: Dispatcher, db: Database, public_host: str) -> None:
+def run_webhook(bot: Bot, dp: Dispatcher, db: Database, public_host: str, webhook_secret: str) -> None:
     logger = logging.getLogger(__name__)
     webhook_url = f"{public_host}{WEBHOOK_PATH}"
 
     port = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", "6000")))
 
     dp.startup.register(
-        partial(on_startup, bot=bot, db=db, dp=dp, webhook_url=webhook_url)
+        partial(on_startup, bot=bot, db=db, dp=dp, webhook_url=webhook_url, webhook_secret=webhook_secret)
     )
     dp.shutdown.register(partial(on_shutdown, bot=bot, db=db))
 
     app = web.Application()
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+    SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=webhook_secret).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
 
     logger.info("Запуск вебхук-сервера на 0.0.0.0:%d, путь %s", port, WEBHOOK_PATH)
@@ -216,7 +216,7 @@ def main() -> None:
     public_host = resolve_public_host()
 
     if public_host:
-        run_webhook(bot, dp, db, public_host)
+        run_webhook(bot, dp, db, public_host, webhook_secret=config.webhook_secret)
     else:
         logging.getLogger(__name__).info(
             "Публичный хост не найден — запуск в режиме polling (локальная разработка)"
