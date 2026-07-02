@@ -12,6 +12,11 @@ A Python Telegram bot for clan management, built with aiogram 3, running in webh
 - `pnpm --filter @workspace/api-server run dev` — run the Node.js API server (proxies Telegram webhook to the Python bot)
 - `pnpm run typecheck` — full TypeScript typecheck across all packages
 
+## Git Scripts
+
+- `bash scripts/push.sh` — push current main branch to GitHub via `GITHUB_TOKEN`; shows commit list and result
+- `bash scripts/pull.sh` — fetch latest changes from GitHub, check for conflicts, apply fast-forward merge
+
 ## Stack
 
 - **Bot:** Python 3.11, aiogram 3, aiohttp, aiosqlite

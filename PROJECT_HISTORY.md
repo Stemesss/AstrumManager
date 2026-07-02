@@ -91,9 +91,11 @@
 - Проект перенесён в новую среду Replit.
 - Установлены Python-зависимости: aiogram, aiohttp, aiosqlite, aiofiles, python-dotenv, pydantic, magic-filter.
 - Установлены Node.js-зависимости через pnpm.
-- Добавлен секрет `TELEGRAM_BOT_TOKEN`.
+- Добавлены секреты `TELEGRAM_BOT_TOKEN` и `GITHUB_TOKEN`.
 - Все три воркфлоу запущены и стабильны.
 - Восстановлена система памяти агента.
+- Настроен git push через GITHUB_TOKEN (прямой URL, без изменения remote config).
+- Созданы `scripts/push.sh` и `scripts/pull.sh` для управления синхронизацией с GitHub.
 
 ---
 

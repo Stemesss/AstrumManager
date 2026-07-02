@@ -33,7 +33,7 @@ PLATFORM: Replit
 
 ## Последнее задание
 
-Восстановление системы памяти проекта AstrumManager.
+Создание scripts/push.sh и scripts/pull.sh; обновление replit.md и PROJECT_HISTORY.md.
 
 ## Следующий этап
 
