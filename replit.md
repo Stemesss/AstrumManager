@@ -64,8 +64,10 @@ A Python Telegram bot for clan management, built with aiogram 3, running in webh
 ## User preferences
 
 - После каждого задания агент обязан автоматически обновлять файлы памяти проекта без отдельной команды.
-- После каждого завершённого задания — git commit с осмысленным сообщением и push.
-- Итоговый отчёт — один текстовый блок без таблиц в стандартном формате (см. AGENT_START.md).
+- После каждого завершённого задания — полный цикл сохранения (см. AGENT_START.md): память → smoke-test → workflow → checkpoint → push → проверка GitHub.
+- Итоговый отчёт — один текстовый блок в обязательном формате (см. AGENT_START.md): ЗАДАНИЕ / СТАТУС / ВЕРСИЯ / ЭТАП / ИЗМЕНЕНИЯ / ФАЙЛЫ / ПРОВЕРКА / ТЕСТЫ / WORKFLOW / GIT / GITHUB / ПАМЯТЬ / ИТОГ.
+- Если push НЕ выполнен — запрещено писать «СТАТУС: выполнено».
+- scripts/push.sh поддерживает два имени токена: GITHUB_TOKEN и AstrumManagerMain (приоритет у GITHUB_TOKEN).
 
 ## Pointers
 
