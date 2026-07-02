@@ -120,15 +120,13 @@ async def handle_setrole(
         ),
     )
 
-    # Синхронизация Telegram Admin Title
-    tg_error = await sync_admin_title(bot, group_chat_id, target_id, confirmed)
+    # Синхронизация Telegram Admin Title (для всех ролей, с game_nick)
+    tg_error = await sync_admin_title(bot, group_chat_id, target_id, confirmed, game_nick=target_nick)
 
     if tg_error:
         tg_note = f"\n\n{tg_error}"
-    elif confirmed in ADMIN_TITLES:
-        tg_note = f"\n\n✅ Telegram-титул установлен: «{ADMIN_TITLES[confirmed]}»"
     else:
-        tg_note = "\n\n✅ Telegram-титул снят (роль Участник)."
+        tg_note = f"\n\n✅ Telegram-титул установлен: «{ADMIN_TITLES[confirmed]}»"
 
     await message.answer(
         f"✅ Роль успешно изменена.\n\n"

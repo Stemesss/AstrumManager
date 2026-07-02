@@ -9,7 +9,7 @@ description: Текущий статус проекта, версия, этап 
 
 ```
 STATUS:   STABLE
-VERSION:  1.2.3
+VERSION:  1.2.4
 DATE:     2026-07-02
 PLATFORM: Replit (новый аккаунт, перенос 2026-07-02)
 ```
@@ -24,10 +24,12 @@ PLATFORM: Replit (новый аккаунт, перенос 2026-07-02)
 
 ## Последнее задание
 
-Финальная настройка окружения (v1.2.3):
-- scripts/push.sh — поддержка GITHUB_TOKEN и AstrumManagerMain (автоматический fallback)
-- AGENT_START.md — обязательный цикл сохранения (10 шагов) + новый формат отчёта
-- replit.md, dev_rules.md, workflow.md — закреплены постоянные правила цикла сохранения
+Исправление генерации Telegram custom_title (v1.2.4 / AUD-007):
+- Старый формат «Воин | Ник» полностью удалён.
+- Новый формат: `{symbol} {game_nick} — {role_label}` для всех 4 ролей.
+- MEMBER теперь тоже получает кастомный титул (◇ {ник} — Участник).
+- Источник имени — только game_nick, никогда Telegram username/first_name.
+- Исправлены 5 файлов: sync_title.py, nick.py, setrole.py, group_nick.py, members.py.
 
 ## База данных
 
@@ -40,6 +42,6 @@ PLATFORM: Replit (новый аккаунт, перенос 2026-07-02)
 
 - `TELEGRAM_BOT_TOKEN`  — ✅ установлен (Replit Secrets)
 - `BOT_OWNER_ID`        — ✅ установлен (shared env var: 8490615925)
-- `AstrumManagerMain`   — ✅ установлен (используется как GitHub PAT в push.sh)
+- `GITHUB_TOKEN`        — ✅ используется push.sh (найден автоматически)
+- `AstrumManagerMain`   — ✅ установлен (fallback для push.sh)
 - `WEBHOOK_SECRET`      — генерируется автоматически (не в Secrets — норма)
-- `GITHUB_TOKEN`        — не требуется (push.sh использует AstrumManagerMain как fallback)

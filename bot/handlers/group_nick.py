@@ -50,7 +50,7 @@ from bot.models.audit import AuditAction
 from bot.services.audit_service import AuditService
 from bot.services.user_service import UserService
 from bot.utils.nick_format import build_full_nick, validate_name
-from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
+from bot.utils.sync_title import sync_admin_title
 
 router = Router()
 router.message.filter(F.chat.type.in_({"group", "supergroup"}))
@@ -118,12 +118,10 @@ async def _set_nick(
         target_id, old_name, new_name, actor_id,
     )
 
-    # Обновить Telegram Admin Title для администраторов
-    tg_error = None
-    if role in ADMIN_TITLES:
-        tg_error = await sync_admin_title(
-            bot, group_chat_id, target_id, role, game_nick=new_name
-        )
+    # Обновить Telegram Admin Title (для всех ролей, источник — только game_nick)
+    tg_error = await sync_admin_title(
+        bot, group_chat_id, target_id, role, game_nick=new_name
+    )
 
     mention = f'<a href="tg://user?id={target_id}">{target_name_tg}</a>'
     tg_note = f"\n<i>Telegram-титул: {old_full} → {new_full}</i>" if not tg_error else ""

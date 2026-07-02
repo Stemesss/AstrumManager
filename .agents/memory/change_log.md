@@ -5,97 +5,73 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.2.4] — 2026-07-02 — Исправление генерации Telegram custom_title
+
+### Исправлено (дефект AUD-007)
+- `bot/utils/sync_title.py` — полностью переписан `build_admin_title`:
+  - Удалён старый формат «Воин | Ник» и весь связанный код (`_TITLE_BASE`, старый `_SEP = " | "`).
+  - Новый формат: `{symbol} {game_nick} — {role_label}` (≤ 16 символов).
+  - Символы: ✪ Лидер / ✦ Дитя клана / ✧ Старейшина / ◇ Участник.
+  - Источник имени — только `game_nick` из БД. Telegram username/first_name не используются.
+  - При смене роли меняется только символ слева; при смене ника — только текст справа.
+  - Если ник не помещается в 16 символов — усекается; если 1 символ не помещается — ник опускается.
+  - `ADMIN_TITLES` расширен до всех 4 ролей (включая MEMBER): `◇ Участник`.
+  - `sync_admin_title` — MEMBER теперь тоже получает кастомный титул (promote + setChatAdministratorCustomTitle).
+  - Старая ветка «снять административный статус для MEMBER» удалена.
+  - Обновлён docstring с документацией ограничения 16 символов для каждой роли.
+
+### Изменено
+- `bot/handlers/nick.py` — `_try_sync_title`: убрана проверка `if role not in ADMIN_TITLES`
+  (теперь все роли получают custom_title). Удалён неиспользуемый импорт `ADMIN_TITLES`.
+- `bot/handlers/setrole.py` — `sync_admin_title` теперь передаёт `game_nick=target_nick`
+  (имя уже было в переменной, просто не передавалось). Упрощена ветка tg_note
+  (удалена мертвая ветка «Telegram-титул снят (роль Участник)»).
+- `bot/handlers/group_nick.py` — убрана проверка `if role in ADMIN_TITLES:`
+  (sync_admin_title вызывается для всех ролей). Удалён неиспользуемый импорт `ADMIN_TITLES`.
+- `bot/handlers/members.py` — упрощена ветка tg_note (удалена мёртвая ветка
+  «Telegram-титул снят»). Удалён неиспользуемый импорт `ADMIN_TITLES`.
+
+### Проверено (без изменений)
+- `bot/utils/nick_format.py` — `build_full_nick` не затронут (отображаемый ник в боте не изменился).
+- `bot/utils/roles.py` — `ROLE_DISPLAY_ICONS` не затронут.
+- Синтаксическая проверка + проверка импортов: все 5 файлов OK.
+- Бот запущен чисто: webhook зарегистрирован, HTTP 200, ошибок импорта нет.
+
 ## [1.2.3] — 2026-07-02 — Финальная настройка окружения и постоянный цикл сохранения
 
 ### Изменено (инфраструктура, не функциональность бота)
 - `scripts/push.sh` — поддержка двух имён токена: GITHUB_TOKEN (приоритет)
   и AstrumManagerMain (fallback). Ручная настройка более не требуется.
-- `AGENT_START.md` — добавлен «ОБЯЗАТЕЛЬНЫЙ ЦИКЛ СОХРАНЕНИЯ» (10 шагов:
-  память → smoke-test → workflow → checkpoint → push → проверка GitHub →
-  отчёт только после успешного push). Обновлён формат итогового отчёта
-  (новые поля: ПРОВЕРКА, ТЕСТЫ, WORKFLOW, GIT с hash/checkpoint/push, GITHUB, ИТОГ).
-- `replit.md` — обновлены User preferences: цикл сохранения, новый формат отчёта,
-  правило «push НЕ выполнен → СТАТУС: не выполнено», поддержка двух токенов в push.sh.
-- `.agents/memory/dev_rules.md` — добавлен раздел «Обязательный цикл после каждого задания»
-  в правила Git, добавлено правило о запрете «СТАТУС: выполнено» без push,
-  задокументированы поддерживаемые имена токенов push.sh.
-- `.agents/memory/workflow.md` — SOP «Выполнение задания» обновлён: вместо «Сделать
-  git commit» — полный цикл сохранения (6 шагов); добавлен блок «ОБЯЗАТЕЛЬНЫЙ ЦИКЛ
-  СОХРАНЕНИЯ» с деталями; исправлена версия с 1.0 на 1.2.2.
+- `AGENT_START.md` — добавлен «ОБЯЗАТЕЛЬНЫЙ ЦИКЛ СОХРАНЕНИЯ».
+- `replit.md` — обновлены User preferences.
+- `.agents/memory/dev_rules.md` — добавлен раздел «Обязательный цикл».
+- `.agents/memory/workflow.md` — SOP «Выполнение задания» обновлён.
 
 ## [1.2.2] — 2026-07-02 — Полировка меню «Участники»
 
-### Проверено (без изменений — уже соответствовало требованиям)
-- Меню «Администрация → Участники» уже не содержало кнопки ⚙️ Настройки —
-  она была убрана ранее (v1.1.0). Кнопка «🗑️ Удалить участника» уже
-  присутствовала (`members_menu_kb`) и полный цикл удаления уже был
-  реализован: список → карточка с подтверждением → удаление из БД
-  (`user_service.delete_member` → `db.delete_user`, стирает пользователя,
-  записи `audit_log` и `complaints`) → обновление списка → запись в журнал
-  аудита (`AuditAction.MEMBER_DELETE`).
-
 ### Добавлено
-- `bot/keyboards/members.py` — новый класс `MemberViewBtn` и функции
-  `view_list_kb` / `view_card_kb` — клавиатуры раздела просмотра участников
-  для главного меню (без кнопок роли/статистики/удаления).
-- `bot/handlers/members.py` — обработчики `memv:list:{page}`,
-  `memv:card:{uid}:{page}`, `memv:noop`, `memv:close` и новый обработчик
-  `F.text == BTN.MEMBERS`, показывающий карточки участников с той же
-  сортировкой и пагинацией, что и в админ-разделе, но полностью в режиме
-  просмотра (нет кнопок изменения роли, статистики, удаления).
-
-### Изменено
-- `bot/keyboards/members.py` — `_pagination_rows` принимает параметр `noop`
-  (по умолчанию `MemberBtn.NOOP`), чтобы отдельный callback-неймспейс
-  `memv:` для просмотра не пересекался с админским `mem:`.
-- `bot/handlers/menu.py` — обработчик `F.text == BTN.MEMBERS` (плоский
-  текстовый список) удалён и заменён карточным просмотром в
-  `bot/handlers/members.py`; удалён более не используемый импорт
-  `role_label`.
+- `bot/keyboards/members.py` — `MemberViewBtn`, `view_list_kb`, `view_card_kb`.
+- `bot/handlers/members.py` — обработчики `memv:list`, `memv:card`, `memv:noop`, `memv:close`.
 
 ## [1.2.1] — 2026-07-02 — Финальная полировка (полный аудит)
 
 ### Исправлено (критично)
-- `bot/keyboards/main_menu.py` — восстановлены константы BTN.GUIDES,
-  BTN.SCREENSHOTS, BTN.MEMES (удалены по ошибке в v1.2.0 вместе с кнопками
-  из MAIN_KEYBOARD; bot/handlers/content.py от них зависел как от ключей
-  конфигурации разделов). Без этой правки бот не запускался (AttributeError
-  при импорте). См. AUD-004.
-
-### Исправлено (мелкое)
-- Удалены неиспользуемые импорты (pyflakes) в 12 файлах: admin.py, audit.py,
-  content.py, news.py, rules.py, icons.py, members.py, menu.py, publish.py,
-  topics.py, bot/keyboards/members.py, bot/models/topic.py.
-- Исправлены 3 f-строки без плейсхолдеров: complaints.py, nick.py, content.py.
-- `requirements.txt` — удалён дублирующийся блок зависимостей (AUD-005).
-- `bot/handlers/members.py` — убрана дублирующая локальная константа
-  `_SUPERUSER`, используется существующая `_SUPERUSER_ID` (AUD-006).
-
-### Инфраструктура
-- Переустановлены Python-зависимости (requirements.txt) и Node-зависимости
-  (pnpm install) — окружение было пересоздано.
+- `bot/keyboards/main_menu.py` — восстановлены BTN.GUIDES/SCREENSHOTS/MEMES (AUD-004).
 
 ## [1.2.0] — 2026-07-02 — Полировка главного меню
 
-### Удалено
-- `bot/keyboards/main_menu.py` — кнопки «😂 Мемы», «📚 Гайды», «📸 Скриншоты» из BTN и из MAIN_KEYBOARD
-- `bot/handlers/menu.py` — строки «Гайды», «Скриншоты», «Мемы» из текста справки
-
 ### Изменено
-- `bot/keyboards/main_menu.py` — новая раскладка 5×2: Новости/События | Правила/Жалобы | Участники/Администрация | Журнал/Статистика | Профиль/Помощь
+- Новая раскладка главного меню 5×2.
 
 ## [1.1.0] — 2026-07-02 — Полировка раздела «Участники»
 
 ### Изменено
-- `bot/utils/roles.py` — ROLE_ORDER: LEADER→ELDER→CLAN_CHILD→MEMBER
-- `bot/keyboards/members.py` — иконки ✪✦✧◇→👑🛡⭐👤; убрана кнопка ⚙️
-- `bot/handlers/members.py` — иконки ✪✦✧◇→👑🛡⭐👤; фильтр game_nick в _show_list()
+- Иконки ролей и порядок ROLE_ORDER.
 
 ## [1.0.2] — 2026-07-02 — Безопасность webhook
 
 ### Добавлено
-- `bot/config/settings.py` — поле webhook_secret (WEBHOOK_SECRET env или auto-generated)
-- `main.py` — secret_token в set_webhook и SimpleRequestHandler
+- `webhook_secret` в Config + set_webhook.
 
 ## [1.0.1] — 2026-07-02 — Git-скрипты
 

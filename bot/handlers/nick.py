@@ -40,7 +40,7 @@ from bot.services.user_service import UserService
 from bot.states.nick import NickChange, NickSetup
 from bot.utils.nick_format import build_full_nick, validate_name
 from bot.utils.profile import PROFILE_KB, build_profile_card
-from bot.utils.sync_title import ADMIN_TITLES, sync_admin_title
+from bot.utils.sync_title import sync_admin_title
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -117,13 +117,11 @@ async def _try_sync_title(
     role: UserRole,
     name: str,
 ) -> str | None:
-    """Обновляет кастомный Telegram-титул для администраторов.
+    """Обновляет кастомный Telegram-титул для всех ролей.
 
-    Для UserRole.MEMBER ничего не делает (Telegram не позволяет).
+    Источник имени — только game_nick (параметр name).
     Возвращает None при успехе или строку с предупреждением.
     """
-    if role not in ADMIN_TITLES:
-        return None  # MEMBER — нет Telegram-привилегий, ничего делать
     return await sync_admin_title(bot, group_chat_id, user_id, role, game_nick=name)
 
 

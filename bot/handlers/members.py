@@ -59,7 +59,7 @@ from bot.services.stats_service import StatsService
 from bot.services.user_service import UserService
 from bot.states.members import MemberDelete
 from bot.utils.roles import ROLE_ORDER, assignable_roles, can_assign, role_label
-from bot.utils.sync_title import ADMIN_TITLES, build_admin_title, sync_admin_title
+from bot.utils.sync_title import build_admin_title, sync_admin_title
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -388,11 +388,9 @@ async def cb_mem_set(
     icon = _ICONS.get(confirmed, "◇")
     if tg_error:
         tg_note = f"\n\n{tg_error}"
-    elif confirmed in ADMIN_TITLES:
+    else:
         actual_title = build_admin_title(confirmed, target_nick)
         tg_note = f"\n\n✅ Telegram-титул установлен: «{actual_title}»"
-    else:
-        tg_note = "\n\n✅ Telegram-титул снят."
 
     u = await _find_user(user_service, target_id)
     card = f"\n\n{_card_text(u)}" if u else ""
