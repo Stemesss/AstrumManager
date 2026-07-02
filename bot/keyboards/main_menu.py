@@ -7,9 +7,6 @@ class BTN:
     """Текст кнопок главного меню — единственный источник истины."""
     NEWS        = "📰 Новости"
     EVENTS      = "📅 События"
-    GUIDES      = "📚 Гайды"
-    SCREENSHOTS = "📸 Скриншоты"
-    MEMES       = "😂 Мемы"
     RULES       = "✅ Правила"
     COMPLAINTS  = "💡 Жалобы и предложения"
     MEMBERS     = "👥 Участники"
@@ -22,13 +19,11 @@ class BTN:
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text=BTN.NEWS),       KeyboardButton(text=BTN.EVENTS)],
-        [KeyboardButton(text=BTN.GUIDES),     KeyboardButton(text=BTN.SCREENSHOTS)],
-        [KeyboardButton(text=BTN.MEMES),      KeyboardButton(text=BTN.RULES)],
-        [KeyboardButton(text=BTN.COMPLAINTS)],
-        [KeyboardButton(text=BTN.MEMBERS),    KeyboardButton(text=BTN.ADMIN)],
-        [KeyboardButton(text=BTN.AUDIT),      KeyboardButton(text=BTN.STATS)],
-        [KeyboardButton(text=BTN.PROFILE),    KeyboardButton(text=BTN.HELP)],
+        [KeyboardButton(text=BTN.NEWS),        KeyboardButton(text=BTN.EVENTS)],
+        [KeyboardButton(text=BTN.RULES),       KeyboardButton(text=BTN.COMPLAINTS)],
+        [KeyboardButton(text=BTN.MEMBERS),     KeyboardButton(text=BTN.ADMIN)],
+        [KeyboardButton(text=BTN.AUDIT),       KeyboardButton(text=BTN.STATS)],
+        [KeyboardButton(text=BTN.PROFILE),     KeyboardButton(text=BTN.HELP)],
     ],
     resize_keyboard=True,
 )
