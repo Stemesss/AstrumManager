@@ -9,6 +9,10 @@ class AuditAction:
     MEMBER_REGISTER   = "member_register"
     MEMBER_ROLE_SET   = "member_role_set"
     MEMBER_NICK_CHANGE = "member_nick_change"
+    MEMBER_WARNING_ADD    = "member_warning_add"
+    MEMBER_WARNING_REMOVE = "member_warning_remove"
+    MEMBER_NOTE_ADD       = "member_note_add"
+    MEMBER_NOTE_REMOVE    = "member_note_remove"
 
     # ── Новости ────────────────────────────────────────────────────────────
     NEWS_CREATE = "news_create"
@@ -63,6 +67,10 @@ CATEGORY_ACTIONS: dict[str, list[str] | None] = {
         AuditAction.MEMBER_REGISTER,
         AuditAction.MEMBER_ROLE_SET,
         AuditAction.MEMBER_NICK_CHANGE,
+        AuditAction.MEMBER_WARNING_ADD,
+        AuditAction.MEMBER_WARNING_REMOVE,
+        AuditAction.MEMBER_NOTE_ADD,
+        AuditAction.MEMBER_NOTE_REMOVE,
         AuditAction.MEMBER_DELETE,
         AuditAction.SEASON_RESET,
         AuditAction.SYNC_TITLES,

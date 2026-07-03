@@ -44,6 +44,26 @@ CREATE TABLE IF NOT EXISTS audit_log (
 )
 """
 
+_CREATE_WARNINGS = """
+CREATE TABLE IF NOT EXISTS warnings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    issued_by   INTEGER NOT NULL,
+    reason      TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
+_CREATE_ADMIN_NOTES = """
+CREATE TABLE IF NOT EXISTS admin_notes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    author_id   INTEGER NOT NULL,
+    text        TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
 _CREATE_TOPICS = """
 CREATE TABLE IF NOT EXISTS forum_topics (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +119,8 @@ class Database:
         await self._conn.execute(_CREATE_USERS)
         await self._conn.execute(_CREATE_NEWS)
         await self._conn.execute(_CREATE_AUDIT)
+        await self._conn.execute(_CREATE_WARNINGS)
+        await self._conn.execute(_CREATE_ADMIN_NOTES)
         await self._conn.execute(_CREATE_TOPICS)
         await self._conn.execute(_CREATE_ATTACHMENTS)
         await self._conn.execute(_CREATE_COMPLAINTS)
@@ -122,6 +144,13 @@ class Database:
                 "ALTER TABLE forum_topics ADD COLUMN icon_custom_emoji_id TEXT"
             )
             logger.info("Миграция: столбец icon_custom_emoji_id добавлен в таблицу forum_topics")
+        except Exception:
+            pass  # Столбец уже существует
+        # Миграция: target_id для audit_log — идентификатор участника, над которым
+        # совершено действие (в отличие от user_id — инициатора действия)
+        try:
+            await self._conn.execute("ALTER TABLE audit_log ADD COLUMN target_id INTEGER")
+            logger.info("Миграция: столбец target_id добавлен в таблицу audit_log")
         except Exception:
             pass  # Столбец уже существует
         await self._conn.commit()
@@ -208,6 +237,8 @@ class Database:
         await self.conn.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
         await self.conn.execute("DELETE FROM audit_log WHERE user_id = ?", (telegram_id,))
         await self.conn.execute("DELETE FROM complaints WHERE user_id = ?", (telegram_id,))
+        await self.conn.execute("DELETE FROM warnings WHERE user_id = ?", (telegram_id,))
+        await self.conn.execute("DELETE FROM admin_notes WHERE user_id = ?", (telegram_id,))
         await self.conn.commit()
 
     async def season_reset(self) -> tuple[int, int]:
@@ -328,18 +359,111 @@ class Database:
         role: str,
         action_type: str,
         description: str,
+        target_id: int | None = None,
     ) -> int:
-        """Добавляет запись в журнал аудита, возвращает её ID."""
+        """Добавляет запись в журнал аудита, возвращает её ID.
+
+        target_id — telegram_id участника, над которым совершено действие
+        (для действий вида "администратор X изменил роль участнику Y").
+        Для действий, где инициатор и объект совпадают (например, self-регистрация),
+        target_id можно не указывать.
+        """
         async with self.conn.execute(
             """
-            INSERT INTO audit_log (user_id, game_nick, role, action_type, description)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO audit_log (user_id, game_nick, role, action_type, description, target_id)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (user_id, game_nick, role, action_type, description),
+            (user_id, game_nick, role, action_type, description, target_id),
         ) as cur:
             row_id = cur.lastrowid
         await self.conn.commit()
         return row_id  # type: ignore[return-value]
+
+    async def get_user_history(self, telegram_id: int, limit: int = 50) -> list[aiosqlite.Row]:
+        """Возвращает записи журнала, где участник — инициатор или объект действия."""
+        async with self.conn.execute(
+            """
+            SELECT * FROM audit_log
+            WHERE user_id = ? OR target_id = ?
+            ORDER BY id DESC LIMIT ?
+            """,
+            (telegram_id, telegram_id, limit),
+        ) as cur:
+            return await cur.fetchall()
+
+    # ------------------------------------------------------------------ #
+    # Методы работы с предупреждениями
+    # ------------------------------------------------------------------ #
+
+    async def add_warning(self, user_id: int, issued_by: int, reason: str) -> int:
+        """Добавляет предупреждение участнику, возвращает его ID."""
+        async with self.conn.execute(
+            "INSERT INTO warnings (user_id, issued_by, reason) VALUES (?, ?, ?)",
+            (user_id, issued_by, reason),
+        ) as cur:
+            warning_id = cur.lastrowid
+        await self.conn.commit()
+        return warning_id  # type: ignore[return-value]
+
+    async def list_warnings(self, user_id: int) -> list[aiosqlite.Row]:
+        """Возвращает все предупреждения участника, от новых к старым."""
+        async with self.conn.execute(
+            "SELECT * FROM warnings WHERE user_id = ? ORDER BY id DESC", (user_id,)
+        ) as cur:
+            return await cur.fetchall()
+
+    async def count_warnings(self, user_id: int) -> int:
+        """Количество предупреждений участника."""
+        async with self.conn.execute(
+            "SELECT COUNT(*) FROM warnings WHERE user_id = ?", (user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+    async def get_warning(self, warning_id: int) -> aiosqlite.Row | None:
+        """Возвращает предупреждение по ID."""
+        async with self.conn.execute(
+            "SELECT * FROM warnings WHERE id = ?", (warning_id,)
+        ) as cur:
+            return await cur.fetchone()
+
+    async def remove_warning(self, warning_id: int) -> None:
+        """Удаляет предупреждение по ID."""
+        await self.conn.execute("DELETE FROM warnings WHERE id = ?", (warning_id,))
+        await self.conn.commit()
+
+    # ------------------------------------------------------------------ #
+    # Методы работы с заметками администрации
+    # ------------------------------------------------------------------ #
+
+    async def add_note(self, user_id: int, author_id: int, text: str) -> int:
+        """Добавляет заметку администрации об участнике, возвращает её ID."""
+        async with self.conn.execute(
+            "INSERT INTO admin_notes (user_id, author_id, text) VALUES (?, ?, ?)",
+            (user_id, author_id, text),
+        ) as cur:
+            note_id = cur.lastrowid
+        await self.conn.commit()
+        return note_id  # type: ignore[return-value]
+
+    async def list_notes(self, user_id: int) -> list[aiosqlite.Row]:
+        """Возвращает все заметки об участнике, от новых к старым."""
+        async with self.conn.execute(
+            "SELECT * FROM admin_notes WHERE user_id = ? ORDER BY id DESC", (user_id,)
+        ) as cur:
+            return await cur.fetchall()
+
+    async def get_note(self, note_id: int) -> aiosqlite.Row | None:
+        """Возвращает заметку по ID."""
+        async with self.conn.execute(
+            "SELECT * FROM admin_notes WHERE id = ?", (note_id,)
+        ) as cur:
+            return await cur.fetchone()
+
+    async def remove_note(self, note_id: int) -> None:
+        """Удаляет заметку по ID."""
+        await self.conn.execute("DELETE FROM admin_notes WHERE id = ?", (note_id,))
+        await self.conn.commit()
 
     async def get_audit_page(
         self,

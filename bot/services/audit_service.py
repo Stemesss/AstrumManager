@@ -27,14 +27,18 @@ class AuditService:
         role: UserRole,
         action_type: str,
         description: str,
+        target_id: int | None = None,
     ) -> None:
         """
         Добавляет запись в журнал.
+        target_id — telegram_id участника, над которым совершено действие
+        (если отличается от инициатора user_id).
         Ошибки логируются, но не пробрасываются — не должны ломать основной поток.
         """
         try:
             await self._db.add_audit_log(
-                user_id, game_nick, role.value, action_type, description
+                user_id, game_nick, role.value, action_type, description,
+                target_id=target_id,
             )
             logger.debug("Audit [%s] %s: %s", action_type, game_nick, description)
         except Exception as exc:  # noqa: BLE001
@@ -59,3 +63,7 @@ class AuditService:
     async def clear(self) -> int:
         """Очищает журнал, возвращает количество удалённых записей."""
         return await self._db.clear_audit_log()
+
+    async def get_user_history(self, telegram_id: int, limit: int = 50) -> list:
+        """Возвращает записи журнала, где участник — инициатор или объект действия."""
+        return await self._db.get_user_history(telegram_id, limit=limit)

@@ -5,6 +5,24 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.2.8] — 2026-07-03 — Этап 2.3.1: смена ника участника из карточки (центр управления)
+
+### Изменено
+- `bot/states/members.py` — добавлен `MemberNickEdit.waiting_name`.
+- `bot/keyboards/members.py` — `member_card_kb()`: добавлена кнопка «✏️ Ник»
+  (`MemberBtn.nick(uid)`), кнопка роли переименована в «⭐ Роль» (функция не менялась).
+- `bot/handlers/members.py` — `cb_mem_nick_start` (запуск FSM, гейт `_check_admin`) →
+  `fsm_mem_nick_enter` (валидация `validate_name`, `user_service.set_game_nick`,
+  `sync_admin_title`, запись `AuditAction.MEMBER_NICK_CHANGE`, показ обновлённой карточки
+  через существующую `member_card_kb`). Новых карточек/меню не создано.
+- Это первый из 7 подэтапов плана «Этап 2.3 — Полный центр управления участником»
+  (план и решение о поле target_id в audit_log подтверждены пользователем).
+
+### Проверено
+- `python3 -m py_compile` — 3 файла, без ошибок.
+- Workflow Telegram Bot перезапущен, стартовал без ошибок, вебхук зарегистрирован.
+- push выполнен: 2fb3f65 → e500502 → origin/main (подтверждено `git ls-remote origin main`).
+
 ## [1.2.8] — 2026-07-03 — Этап 2.2: редизайн раздела «Участники» (только интерфейс)
 
 ### Изменено (только UI, без изменений логики/ролей/Telegram API/прав доступа)
