@@ -190,9 +190,54 @@ async def _show_delete_list(
         await cb.message.answer(text, reply_markup=kb)
 
 
-async def _view_list_users(user_service: UserService) -> list[User]:
-    # Показываем только участников с установленным игровым ником (как в админ-разделе)
-    return _sort_users([u for u in await user_service.get_all_users() if u.game_nick])
+def _is_test_user(u: User) -> bool:
+    """Возвращает True, если пользователь является тестовым (по суффиксам в нике)."""
+    nick = (u.game_nick or "").strip()
+    return "(Test)" in nick or "(T)" in nick
+
+
+async def _view_list_users(
+    user_service: UserService,
+    bot: Bot | None = None,
+    group_chat_id: int | None = None,
+) -> list[User]:
+    """Список участников для обычного просмотра.
+
+    Фильтрует:
+    • пользователей без игрового ника;
+    • пользователей с суффиксом (Test) или (T) в нике;
+    • пользователей, отсутствующих в Telegram-группе (если доступен bot).
+
+    При ошибке API пользователь включается в список (fail-open).
+    """
+    users = [
+        u for u in await user_service.get_all_users()
+        if u.game_nick and not _is_test_user(u)
+    ]
+
+    # Фильтрация по членству в Telegram-группе
+    if bot and group_chat_id:
+        filtered: list[User] = []
+        for u in users:
+            try:
+                member = await bot.get_chat_member(group_chat_id, u.telegram_id)
+                if member.status not in ("left", "kicked"):
+                    filtered.append(u)
+            except TelegramBadRequest as e:
+                err = str(e).lower()
+                if any(k in err for k in ("user not found", "participant", "user_not_participant")):
+                    pass  # подтверждено отсутствие — не показываем
+                else:
+                    filtered.append(u)  # неизвестная ошибка — включаем
+            except TelegramRetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+                filtered.append(u)  # после ожидания включаем без повторной проверки
+            except Exception:
+                filtered.append(u)  # ошибка API — включаем (fail-open)
+            await asyncio.sleep(0.05)
+        users = filtered
+
+    return _sort_users(users)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -200,9 +245,17 @@ async def _view_list_users(user_service: UserService) -> list[User]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.message(F.text == BTN.MEMBERS)
-async def handle_members_view(message: Message, user_service: UserService) -> None:
-    """Красивый просмотр списка участников — без административных функций."""
-    all_users = await _view_list_users(user_service)
+async def handle_members_view(
+    message: Message,
+    user_service: UserService,
+    bot: Bot,
+    group_chat_id: int,
+) -> None:
+    """Красивый просмотр списка участников — без административных функций.
+
+    Фильтрует тестовых пользователей (Test)/(T) и отсутствующих в группе.
+    """
+    all_users = await _view_list_users(user_service, bot, group_chat_id)
     total = len(all_users)
     if total == 0:
         await message.answer("👥 <b>Участники</b>\n\nСписок пока пуст.")
@@ -218,9 +271,14 @@ async def handle_members_view(message: Message, user_service: UserService) -> No
 
 
 @router.callback_query(F.data.startswith("memv:list:"))
-async def cb_memv_list(callback: CallbackQuery, user_service: UserService) -> None:
+async def cb_memv_list(
+    callback: CallbackQuery,
+    user_service: UserService,
+    bot: Bot,
+    group_chat_id: int,
+) -> None:
     page = int(callback.data.split(":")[2])
-    all_users = await _view_list_users(user_service)
+    all_users = await _view_list_users(user_service, bot, group_chat_id)
     total = len(all_users)
     page_users = all_users[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
     text = (

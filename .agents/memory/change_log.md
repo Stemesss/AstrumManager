@@ -5,6 +5,28 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.2.8] — 2026-07-03 — Задание №4: кнопка отмены при смене ника + фильтрация участников
+
+### Изменено (только поведение FSM и отображение списка; callback_data/логика/права/БД не тронуты)
+- `bot/handlers/cancel.py` — добавлен NickChange-специфичный обработчик отмены
+  (StateFilter NickChange.waiting_name/waiting_confirm); возвращает MAIN_KEYBOARD
+  и карточку профиля с PROFILE_KB вместо общего «❌ Действие отменено».
+- `bot/handlers/nick.py` — импортирован CANCEL_KB; добавлен _CHANGE_PREVIEW_KB
+  (✅ Подтвердить / ✏️ Изменить / ❌ Отмена) для потока NickChange; cb_nick_change_start
+  теперь показывает CANCEL_KB при выводе промпта; fsm_change_enter_name показывает
+  CANCEL_KB при ошибках и _CHANGE_PREVIEW_KB при предпросмотре; добавлен
+  cb_nick_cancel_change (state=NickChange.waiting_confirm) — очищает FSM, восстанавливает
+  MAIN_KEYBOARD, показывает профиль.
+- `bot/handlers/members.py` — добавлен _is_test_user(); _view_list_users() принимает
+  параметры bot/group_chat_id, фильтрует (Test)/(T) по нику и отсутствующих в
+  Telegram-группе (fail-open при ошибках API); handle_members_view и cb_memv_list
+  передают bot и group_chat_id; _show_delete_list — без изменений (все пользователи).
+
+### Проверено
+- `python3 -m py_compile` — 3 изменённых файла, без ошибок.
+- Workflow Telegram Bot — RUNNING, вебхук зарегистрирован, HTTP 200.
+- Code review: упорядочен FSM state-filter на cb_nick_cancel_change.
+
 ## [1.2.8] — 2026-07-03 — Задание №2: единый стиль (Журнал действий / Статистика / Участники)
 
 ### Изменено (только UI, callback_data/логика/права/БД/форумные темы не тронуты)

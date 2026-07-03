@@ -12,8 +12,8 @@ STATUS:   STABLE
 VERSION:  1.2.8
 DATE:     2026-07-03
 PLATFORM: Replit (новый аккаунт, перенос 2026-07-02)
-HEAD:     e500502
-GIT SYNC: origin/main == local HEAD (e500502) — подтверждено git ls-remote
+HEAD:     (после push — см. git ls-remote)
+GIT SYNC: ожидает push
 ```
 
 ## Воркфлоу
@@ -22,25 +22,17 @@ GIT SYNC: origin/main == local HEAD (e500502) — подтверждено git l
 |---------|--------|------|
 | Telegram Bot (Python / aiogram 3) | RUNNING | 6000 |
 | API Server (Node.js / Express) | RUNNING | 8080 |
-| Component Preview Server (Vite) | RUNNING | 8081 |
+| Component Preview Server (Vite) | FAILED (не нужен для бота) | — |
 
 ## Последнее задание
 
-Задание №2 — «Единый визуальный стиль: Журнал действий / Центр статистики / Участники»
-(только UI, без изменения callback_data/логики/прав/БД/форумных тем):
-- ✅ Журнал действий — меню перегруппировано, добавлены разделители `_DIVIDER`
-  во все текстовые экраны (меню, карточки записей, поиск, подтверждение очистки).
-- ✅ Центр статистики — меню перегруппировано (парные кнопки), разделители добавлены
-  во все карточки (победитель месяца, топ-10, рост клана, зал славы).
-- ✅ Участники — единый `_member_label()` (роль-иконка + ник + username/имя) применён
-  во всех списках (просмотр/удаление/поиск); карточка участника и подтверждение
-  удаления используют `role_label()` вместо старых `_ICONS`; разделители добавлены
-  во все текстовые экраны (меню, список, статистика, подтверждение удаления).
-- Проверено: py_compile всех 6 файлов OK; callback_data сверен построчно до/после
-  (`grep -o 'callback_data="[^"]*"'`) — 0 отличий; workflow Telegram Bot перезапущен
-  дважды, стартовал чисто, вебхук зарегистрирован; runtime smoke-test клавиатур
-  участников (обычный/без username/совпадающий username) — без ошибок.
-- push: ожидает Replit Checkpoint.
+Задание №4 — «Кнопка отмены при смене ника + фильтрация участников»:
+- ✅ cancel.py — NickChange-специфичный обработчик отмены (возврат в профиль).
+- ✅ nick.py — CANCEL_KB в промптах NickChange; _CHANGE_PREVIEW_KB с кнопкой
+  «❌ Отмена»; cb_nick_cancel_change (state=NickChange.waiting_confirm).
+- ✅ members.py — _is_test_user() фильтр; _view_list_users() принимает bot/group_chat_id
+  и фильтрует (Test)/(T) + отсутствующих в группе; del_list не тронут.
+- Проверено: py_compile 3 файлов OK; workflow RUNNING; HTTP 200 в логах.
 
 Предыдущий завершённый этап: Задание №1 «Обновление интерфейса основных разделов».
 См. `.agents/memory/change_log.md` для полной истории.

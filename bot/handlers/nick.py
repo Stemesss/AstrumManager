@@ -33,6 +33,7 @@ from aiogram.types import (
 )
 
 from bot.keyboards.main_menu import MAIN_KEYBOARD
+from bot.keyboards.nav import CANCEL_KB
 from bot.models.audit import AuditAction
 from bot.models.user import UserRole
 from bot.services.audit_service import AuditService
@@ -47,10 +48,22 @@ logger = logging.getLogger(__name__)
 
 # ─── Клавиатура предпросмотра ─────────────────────────────────────────────────
 
+# Для потока NickSetup — без кнопки отмены (новый пользователь обязан завершить)
 _PREVIEW_KB = InlineKeyboardMarkup(inline_keyboard=[[
     InlineKeyboardButton(text="✅ Подтвердить", callback_data="nick:confirm"),
     InlineKeyboardButton(text="✏️ Изменить",    callback_data="nick:edit"),
 ]])
+
+# Для потока NickChange — с кнопкой «❌ Отмена» (возврат в профиль)
+_CHANGE_PREVIEW_KB = InlineKeyboardMarkup(inline_keyboard=[
+    [
+        InlineKeyboardButton(text="✅ Подтвердить", callback_data="nick:confirm"),
+        InlineKeyboardButton(text="✏️ Изменить",    callback_data="nick:edit"),
+    ],
+    [
+        InlineKeyboardButton(text="❌ Отмена",       callback_data="nick:cancel_change"),
+    ],
+])
 
 # ─── Подсказка по копированию ника ───────────────────────────────────────────
 
@@ -235,7 +248,8 @@ async def cb_nick_change_start(
     """Запускает FSM смены имени из профиля."""
     await state.set_state(NickChange.waiting_name)
     await callback.answer()
-    await callback.message.answer(_CHANGE_PROMPT)
+    # Показываем кнопку «❌ Отмена» — пользователь может выйти из FSM в любой момент
+    await callback.message.answer(_CHANGE_PROMPT, reply_markup=CANCEL_KB)
 
 
 @router.message(NickChange.waiting_name)
@@ -246,12 +260,12 @@ async def fsm_change_enter_name(
 ) -> None:
     """Принимает новое имя, валидирует, показывает предпросмотр."""
     if not message.text or message.text.startswith("/"):
-        await message.answer(_CHANGE_PROMPT)
+        await message.answer(_CHANGE_PROMPT, reply_markup=CANCEL_KB)
         return
 
     name, error = validate_name(message.text)
     if error:
-        await message.answer(error)
+        await message.answer(error, reply_markup=CANCEL_KB)
         return
 
     role = await user_service.get_role(message.from_user.id)
@@ -260,7 +274,8 @@ async def fsm_change_enter_name(
     await state.update_data(pending_name=name)
     await state.set_state(NickChange.waiting_confirm)
 
-    await message.answer(_preview_text(full_nick), reply_markup=_PREVIEW_KB)
+    # Используем _CHANGE_PREVIEW_KB с кнопкой «❌ Отмена»
+    await message.answer(_preview_text(full_nick), reply_markup=_CHANGE_PREVIEW_KB)
 
 
 @router.callback_query(F.data == "nick:confirm", NickChange.waiting_confirm)
@@ -329,7 +344,38 @@ async def cb_change_edit(
 ) -> None:
     """Возвращает к вводу нового имени."""
     await state.set_state(NickChange.waiting_name)
+    # Редактируем inline-сообщение — CANCEL_KB (reply keyboard) уже показана
     await callback.message.edit_text(_CHANGE_PROMPT)
+    await callback.answer()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Отмена смены имени через inline-кнопку (из предпросмотра NickChange)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "nick:cancel_change", NickChange.waiting_confirm)
+async def cb_nick_cancel_change(
+    callback: CallbackQuery,
+    state: FSMContext,
+    user_service: UserService,
+) -> None:
+    """Отменяет смену имени из предпросмотра и возвращает в раздел «👤 Мой профиль»."""
+    await state.clear()
+
+    user  = await user_service.get_or_create(callback.from_user)
+    role  = await user_service.get_role(callback.from_user.id)
+    stats = await user_service.get_profile_stats(callback.from_user.id)
+    name  = user.game_nick or ""
+
+    # Восстанавливаем главное меню (заменяем CANCEL_KB) и показываем профиль
+    await callback.message.answer(
+        "⚜️ <b>AstrumManager</b>  •  Главное меню",
+        reply_markup=MAIN_KEYBOARD,
+    )
+    await callback.message.edit_text(
+        build_profile_card(name, role, stats),
+        reply_markup=PROFILE_KB,
+    )
     await callback.answer()
 
 
