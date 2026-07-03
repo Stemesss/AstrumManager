@@ -10,10 +10,10 @@ description: Текущий статус проекта, версия, этап 
 ```
 STATUS:   STABLE
 VERSION:  1.2.8
-DATE:     2026-07-02
+DATE:     2026-07-03
 PLATFORM: Replit (новый аккаунт, перенос 2026-07-02)
-HEAD:     см. GIT SYNC ниже — обновляется после push
-GIT SYNC: см. вывод `git ls-remote origin main` после push.sh
+HEAD:     b2e8650
+GIT SYNC: b2e86501181a924c215048a5bcc3d566d7cd8ac5 origin/main == HEAD ✅
 ```
 
 ## Воркфлоу
