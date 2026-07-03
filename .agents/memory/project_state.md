@@ -12,8 +12,8 @@ STATUS:   STABLE
 VERSION:  1.2.8
 DATE:     2026-07-03
 PLATFORM: Replit (новый аккаунт, перенос 2026-07-02)
-HEAD:     b2e8650
-GIT SYNC: b2e86501181a924c215048a5bcc3d566d7cd8ac5 origin/main == HEAD ✅
+HEAD:     acb40dd
+GIT SYNC: обновляется после push
 ```
 
 ## Воркфлоу
