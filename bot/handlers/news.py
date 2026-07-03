@@ -82,7 +82,12 @@ async def _show_news_list(
     items = await news_service.get_list()
 
     if not items:
-        text = "📰 <b>Новости клана Astrum</b>\n\nНовостей пока нет."
+        text = (
+            "📰 <b>Новости клана Astrum</b>\n\n"
+            "Новостей пока нет.\n\n"
+            "📢 Здесь будут появляться важные объявления, "
+            "итоги событий и другие новости сообщества."
+        )
         kb = news_list_kb([], is_manager)
     else:
         pinned = [i for i in items if i.pinned]

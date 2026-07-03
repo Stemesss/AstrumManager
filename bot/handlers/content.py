@@ -52,38 +52,42 @@ _MAX_CONTENT = 4000
 
 _TYPES: dict[str, dict] = {
     "events": {
-        "icon":      "📅",
-        "label":     "Событие",
-        "label_pl":  "События",
-        "label_gen": "события",
-        "btn":       BTN.EVENTS,
+        "icon":       "📅",
+        "label":      "Событие",
+        "label_pl":   "События",
+        "label_gen":  "события",
+        "btn":        BTN.EVENTS,
+        "empty_hint": "🗓 Ближайшие мероприятия клана появятся здесь. Следи за новостями!",
         "audit_edit": AuditAction.EVENT_EDIT,
         "audit_del":  AuditAction.EVENT_DELETE,
     },
     "guides": {
-        "icon":      "📚",
-        "label":     "Гайд",
-        "label_pl":  "Гайды",
-        "label_gen": "гайда",
-        "btn":       BTN.GUIDES,
+        "icon":       "📚",
+        "label":      "Гайд",
+        "label_pl":   "Гайды",
+        "label_gen":  "гайда",
+        "btn":        BTN.GUIDES,
+        "empty_hint": "📖 Полезные гайды и обучающие материалы появятся здесь.",
         "audit_edit": AuditAction.GUIDE_EDIT,
         "audit_del":  AuditAction.GUIDE_DELETE,
     },
     "screenshots": {
-        "icon":      "📸",
-        "label":     "Скриншот",
-        "label_pl":  "Скриншоты",
-        "label_gen": "скриншота",
-        "btn":       BTN.SCREENSHOTS,
+        "icon":       "📸",
+        "label":      "Скриншот",
+        "label_pl":   "Скриншоты",
+        "label_gen":  "скриншота",
+        "btn":        BTN.SCREENSHOTS,
+        "empty_hint": "🖼 Скриншоты активности клана появятся здесь.",
         "audit_edit": AuditAction.SCREENSHOT_UPLOAD,
         "audit_del":  AuditAction.SCREENSHOT_DELETE,
     },
     "memes": {
-        "icon":      "😂",
-        "label":     "Мем",
-        "label_pl":  "Мемы",
-        "label_gen": "мема",
-        "btn":       BTN.MEMES,
+        "icon":       "😂",
+        "label":      "Мем",
+        "label_pl":   "Мемы",
+        "label_gen":  "мема",
+        "btn":        BTN.MEMES,
+        "empty_hint": "😄 Забавные моменты из жизни клана появятся здесь.",
         "audit_edit": AuditAction.MEME_EDIT,
         "audit_del":  AuditAction.MEME_DELETE,
     },
@@ -116,7 +120,12 @@ def _item_card(item: NewsItem, cfg: dict) -> str:
 
 def _list_text(cfg: dict, total: int) -> str:
     if total == 0:
-        return f"{cfg['icon']} <b>{cfg['label_pl']}</b>\n\nЗаписей пока нет."
+        hint = cfg.get("empty_hint", "")
+        hint_line = f"\n\n{hint}" if hint else ""
+        return (
+            f"{cfg['icon']} <b>{cfg['label_pl']}</b>\n\n"
+            f"Записей пока нет.{hint_line}"
+        )
     return (
         f"{cfg['icon']} <b>{cfg['label_pl']}</b>\n\n"
         f"Всего: {total}\n\n"

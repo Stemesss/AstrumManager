@@ -186,7 +186,7 @@ async def cb_setup_confirm(
         callback.from_user.id, full_nick,
     )
 
-    # Обновить Telegram Admin Title (только для администраторов)
+    # Обновить Telegram Admin Title и установить custom_title (все роли, включая Участника)
     tg_error = await _try_sync_title(
         bot, group_chat_id, callback.from_user.id, role, name
     )

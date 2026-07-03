@@ -37,6 +37,20 @@ logger = logging.getLogger(__name__)
 _MANAGER_ROLES = {UserRole.LEADER, UserRole.CLAN_CHILD, UserRole.ELDER}
 _MAX_CONTENT   = 4000
 
+# Сокращённая утверждённая версия правил клана (показывается до первой публикации)
+_DEFAULT_RULES_TITLE   = "Правила клана Astrum"
+_DEFAULT_RULES_CONTENT = (
+    "1. Уважай всех участников клана — недопустимы оскорбления, токсичность и провокации.\n\n"
+    "2. Активно участвуй в жизни клана — события, рейды, общение в чате.\n\n"
+    "3. Игровой ник в AstrumManager должен совпадать с ником в игре.\n\n"
+    "4. Запрещено передавать аккаунт третьим лицам.\n\n"
+    "5. Спам, реклама и посторонние ссылки в чате запрещены.\n\n"
+    "6. Все спорные ситуации решаются через администрацию клана.\n\n"
+    "7. Длительное отсутствие без предупреждения (более 14 дней) — "
+    "основание для исключения.\n\n"
+    "8. Решения Лидера и Старейшин обязательны к исполнению."
+)
+
 
 def _fmt_date(dt_str: str) -> str:
     months = {1: "января", 2: "февраля", 3: "марта", 4: "апреля",
@@ -66,8 +80,9 @@ async def _show_rules(
     items = await news_service.get_list_by_type("rules")
     if not items:
         text = (
-            "✅ <b>Правила клана</b>\n\n"
-            "Правила ещё не опубликованы."
+            f"✅ <b>{_DEFAULT_RULES_TITLE}</b>\n\n"
+            f"{_DEFAULT_RULES_CONTENT}\n\n"
+            "📅 Версия по умолчанию"
         )
         kb = rules_view_kb(None, manager)
         msg = target if isinstance(target, Message) else target.message

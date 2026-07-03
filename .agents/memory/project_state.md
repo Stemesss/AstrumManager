@@ -12,7 +12,7 @@ STATUS:   STABLE
 VERSION:  1.2.8
 DATE:     2026-07-03
 PLATFORM: Replit (новый аккаунт, перенос 2026-07-02)
-HEAD:     acb40dd
+HEAD:     f0caa0a (до push — checkpoint pending)
 GIT SYNC: обновляется после push
 ```
 
