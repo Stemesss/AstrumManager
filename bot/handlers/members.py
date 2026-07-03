@@ -101,18 +101,30 @@ def _effective_role(actor_id: int, actor_role: UserRole) -> UserRole:
     return UserRole.LEADER if actor_id == _SUPERUSER_ID else actor_role
 
 
-async def _card_text(u: User, user_service: UserService) -> str:
+_DIVIDER = "━━━━━━━━━━━━━━━━"
+
+
+async def _card_text(u: User, user_service: UserService, stats_service: StatsService) -> str:
+    """Единая карточка участника — используется и в администрировании, и в просмотре."""
     icon = _ICONS.get(u.role, "◇")
     username_line = f"@{u.username}" if u.username else "—"
     days = await user_service.get_days_in_clan(u.telegram_id)
+    score = (await stats_service.user_activity(u.telegram_id))["score"]
+    title = build_admin_title(u.role, u.game_nick) if u.game_nick else ""
+
     return (
-        f"👤 <b>{_display_name(u)}</b>\n"
-        f"{icon} {u.role.value}\n\n"
-        f"🎮 <b>Игровой ник:</b> {u.game_nick or '—'}\n"
-        f"📱 <b>Telegram:</b> {username_line}\n"
-        f"🆔 <b>ID:</b> <code>{u.telegram_id}</code>\n"
+        f"👤 <b>{u.first_name}</b>\n"
+        f"🎮 {u.game_nick or '—'}\n\n"
+        f"{_DIVIDER}\n\n"
+        f"🏷 <b>Telegram-титул:</b> {title or '—'}\n"
+        f"⭐ <b>Роль:</b> {icon} {u.role.value}\n"
+        f"🟢 <b>Статус:</b> Активен\n\n"
+        f"{_DIVIDER}\n\n"
+        f"🏆 <b>Очков активности:</b> {score}\n"
         f"📅 <b>В клане:</b> {pluralize_days(days)}\n\n"
-        "🟢 Активен"
+        f"{_DIVIDER}\n\n"
+        f"📱 {username_line}\n"
+        f"🆔 <code>{u.telegram_id}</code>"
     )
 
 
@@ -207,7 +219,9 @@ async def cb_memv_list(callback: CallbackQuery, user_service: UserService) -> No
 
 
 @router.callback_query(F.data.startswith("memv:card:"))
-async def cb_memv_card(callback: CallbackQuery, user_service: UserService) -> None:
+async def cb_memv_card(
+    callback: CallbackQuery, user_service: UserService, stats_service: StatsService
+) -> None:
     parts = callback.data.split(":")
     user_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
@@ -216,7 +230,7 @@ async def cb_memv_card(callback: CallbackQuery, user_service: UserService) -> No
         await callback.answer("Участник не найден.", show_alert=True)
         return
     await callback.answer()
-    text = await _card_text(u, user_service)
+    text = await _card_text(u, user_service, stats_service)
     try:
         await callback.message.edit_text(text, reply_markup=view_card_kb(user_id, page))
     except Exception:
@@ -297,7 +311,9 @@ async def cb_mem_close(callback: CallbackQuery) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("mem:card:"))
-async def cb_mem_card(callback: CallbackQuery, user_service: UserService) -> None:
+async def cb_mem_card(
+    callback: CallbackQuery, user_service: UserService, stats_service: StatsService
+) -> None:
     if not await _check_admin(callback, user_service):
         return
     user_id = int(callback.data.split(":")[2])
@@ -306,7 +322,7 @@ async def cb_mem_card(callback: CallbackQuery, user_service: UserService) -> Non
         await callback.answer("Участник не найден.", show_alert=True)
         return
     await callback.answer()
-    text = await _card_text(u, user_service)
+    text = await _card_text(u, user_service, stats_service)
     await callback.message.edit_text(text, reply_markup=member_card_kb(user_id))
 
 
@@ -348,6 +364,7 @@ async def cb_mem_set(
     callback: CallbackQuery,
     user_service: UserService,
     audit_service: AuditService,
+    stats_service: StatsService,
     bot: Bot,
     group_chat_id: int,
 ) -> None:
@@ -401,7 +418,7 @@ async def cb_mem_set(
         tg_note = f"\n\n✅ Telegram-титул установлен: «{actual_title}»"
 
     u = await _find_user(user_service, target_id)
-    card = f"\n\n{await _card_text(u, user_service)}" if u else ""
+    card = f"\n\n{await _card_text(u, user_service, stats_service)}" if u else ""
 
     await callback.answer(f"✅ {icon} {confirmed.value}", show_alert=False)
     await callback.message.edit_text(
