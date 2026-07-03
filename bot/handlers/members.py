@@ -37,7 +37,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.admin_panel import AdminBtn
-from bot.keyboards.main_menu import BTN
+from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
 from bot.keyboards.members import (
     PAGE_SIZE,
     MemberBtn,
@@ -63,7 +63,8 @@ from bot.services.stats_service import StatsService
 from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 from bot.handlers.synctitles import run_sync_titles
-from bot.states.members import MemberDelete
+from bot.states.members import MemberDelete, MemberNickEdit
+from bot.utils.nick_format import validate_name
 from bot.utils.roles import ROLE_DISPLAY_ICONS, ROLE_ORDER, assignable_roles, can_assign, role_label
 from bot.utils.sync_title import build_admin_title, sync_admin_title
 from bot.utils.text import pluralize_days
@@ -428,6 +429,107 @@ async def cb_mem_set(
         f"{card}",
         reply_markup=member_card_kb(target_id),
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Смена игрового ника (из карточки участника, административное действие)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_NICK_EDIT_PROMPT = (
+    "✏️ <b>Введите новый игровой ник участника:</b>\n\n"
+    "• от 3 до 20 символов\n"
+    "• только буквы, цифры, пробел, дефис\n"
+    "• без эмодзи и спецсимволов\n"
+    "• только имя, без титулов"
+)
+
+
+@router.callback_query(F.data.startswith("mem:nick:"))
+async def cb_mem_nick_start(
+    callback: CallbackQuery, user_service: UserService, state: FSMContext
+) -> None:
+    if not await _check_admin(callback, user_service):
+        return
+    target_id = int(callback.data.split(":")[2])
+    u = await _find_user(user_service, target_id)
+    if not u:
+        await callback.answer("Участник не найден.", show_alert=True)
+        return
+
+    await state.set_state(MemberNickEdit.waiting_name)
+    await state.update_data(target_id=target_id)
+    await callback.answer()
+    await callback.message.answer(_NICK_EDIT_PROMPT, reply_markup=CANCEL_KB)
+
+
+@router.message(MemberNickEdit.waiting_name)
+async def fsm_mem_nick_enter(
+    message: Message,
+    state: FSMContext,
+    user_service: UserService,
+    audit_service: AuditService,
+    stats_service: StatsService,
+    bot: Bot,
+    group_chat_id: int,
+) -> None:
+    data = await state.get_data()
+    target_id = data.get("target_id")
+
+    if not message.text or message.text.startswith("/"):
+        await message.answer(_NICK_EDIT_PROMPT, reply_markup=CANCEL_KB)
+        return
+
+    new_name, error = validate_name(message.text)
+    if error:
+        await message.answer(error, reply_markup=CANCEL_KB)
+        return
+
+    await state.clear()
+
+    u = await _find_user(user_service, target_id)
+    if not u:
+        await message.answer("Участник не найден.", reply_markup=MAIN_KEYBOARD)
+        return
+
+    old_name = u.game_nick or "?"
+    role = u.role
+    actor_id = message.from_user.id
+    actor_role = await user_service.get_role(actor_id)
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+
+    await user_service.set_game_nick(target_id, new_name)
+
+    old_title = build_admin_title(role, old_name) if old_name != "?" else old_name
+    new_title = build_admin_title(role, new_name)
+
+    await audit_service.log(
+        user_id=actor_id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.MEMBER_NICK_CHANGE,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} изменил ник участнику "
+            f"{old_title} → {new_title}"
+        ),
+    )
+
+    logger.info(
+        "%s сменил ник участнику %s: %r → %r",
+        actor_id, target_id, old_name, new_name,
+    )
+
+    tg_error = await sync_admin_title(bot, group_chat_id, target_id, role, game_nick=new_name)
+
+    u = await _find_user(user_service, target_id)
+    card = await _card_text(u, user_service, stats_service) if u else ""
+
+    tg_note = f"\n\n{tg_error}" if tg_error else f"\n\n✅ Telegram-титул обновлён: «{new_title}»"
+
+    await message.answer(
+        f"✅ <b>Ник успешно изменён.</b>{tg_note}\n\n{card}",
+        reply_markup=member_card_kb(target_id),
+    )
+    await message.answer("⚜️ <b>AstrumManager</b>  •  Главное меню", reply_markup=MAIN_KEYBOARD)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

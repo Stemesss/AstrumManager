@@ -38,6 +38,10 @@ class MemberBtn:
         return f"mem:role:{uid}"
 
     @staticmethod
+    def nick(uid: int) -> str:
+        return f"mem:nick:{uid}"
+
+    @staticmethod
     def stats(uid: int) -> str:
         return f"mem:stats:{uid}"
 
@@ -201,12 +205,17 @@ def view_card_kb(user_id: int, page: int = 0) -> InlineKeyboardMarkup:
 
 
 def member_card_kb(user_id: int, page: int = 0) -> InlineKeyboardMarkup:
-    """Кнопки карточки участника (администрирование) — сгруппированы по смыслу."""
+    """Кнопки карточки участника (администрирование) — сгруппированы по смыслу.
+
+    Единый центр управления участником — все административные действия
+    открываются отсюда, без отдельных дополнительных меню.
+    """
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🏷 Роль",        callback_data=MemberBtn.role(user_id)),
-            InlineKeyboardButton(text="📊 Статистика",  callback_data=MemberBtn.stats(user_id)),
+            InlineKeyboardButton(text="✏️ Ник",         callback_data=MemberBtn.nick(user_id)),
+            InlineKeyboardButton(text="⭐ Роль",        callback_data=MemberBtn.role(user_id)),
         ],
+        [InlineKeyboardButton(text="📊 Статистика",  callback_data=MemberBtn.stats(user_id))],
         [InlineKeyboardButton(text="🗑 Удалить участника", callback_data=MemberBtn.del_card(user_id))],
         [InlineKeyboardButton(text="⬅️ Назад",           callback_data=MemberBtn.list(page))],
     ])
