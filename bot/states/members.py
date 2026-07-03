@@ -10,3 +10,13 @@ class MemberDelete(StatesGroup):
 class MemberNickEdit(StatesGroup):
     """Смена игрового ника участника администратором из карточки."""
     waiting_name = State()
+
+
+class MemberWarnAdd(StatesGroup):
+    """FSM выдачи предупреждения участнику администратором."""
+    waiting_reason = State()
+
+
+class MemberNoteAdd(StatesGroup):
+    """FSM добавления заметки администрации об участнике."""
+    waiting_text = State()

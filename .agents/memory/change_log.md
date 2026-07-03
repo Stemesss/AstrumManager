@@ -5,6 +5,33 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.2.8] — 2026-07-03 — Этап 2.3.2–2.3.6: target_id + предупреждения + заметки + история + аудит прав
+
+### Изменено
+
+#### bot/keyboards/members.py
+- `MemberBtn`: добавлены статические методы `warnings(uid)`, `warn_add(uid)`, `warn_del(uid, wid)`,
+  `notes(uid)`, `note_add(uid)`, `note_del(uid, nid)`, `history(uid)`.
+- `member_card_kb()`: добавлены кнопки «⚠️ Предупреждения», «📝 Заметки», «📋 История».
+- Новые клавиатуры: `warnings_kb(uid, warn_list)`, `notes_kb(uid, notes_list)`, `history_kb(uid)`.
+
+#### bot/states/members.py
+- Добавлены FSM-группы `MemberWarnAdd.waiting_reason` и `MemberNoteAdd.waiting_text`.
+
+#### bot/handlers/members.py
+- **2.3.2**: `target_id` передаётся в `audit_service.log()` для смены роли, смены ника, удаления.
+- **2.3.3**: Обработчики предупреждений — `cb_mem_warnings`, `cb_mem_warn_add_start`,
+  `fsm_mem_warn_reason`, `cb_mem_warn_del`. Защита: суперпользователю нельзя выдать предупреждение.
+- **2.3.4**: Обработчики заметок — `cb_mem_notes`, `cb_mem_note_add_start`,
+  `fsm_mem_note_text`, `cb_mem_note_del`. AuditAction: MEMBER_NOTE_ADD, MEMBER_NOTE_REMOVE.
+- **2.3.5**: Обработчик истории — `cb_mem_history` (audit_log по user_id OR target_id, лимит 20).
+- **2.3.6**: Аудит прав — все новые handlers защищены `_check_admin()`;
+  Cancel handler покрывает MemberWarnAdd/MemberNoteAdd FSM глобально.
+
+### Проверено
+- `python3 -m py_compile` — 3 файла (keyboards/members.py, states/members.py, handlers/members.py), без ошибок.
+- push: ожидает Replit Checkpoint.
+
 ## [1.2.8] — 2026-07-03 — Этап 2.3.1: смена ника участника из карточки (центр управления)
 
 ### Изменено

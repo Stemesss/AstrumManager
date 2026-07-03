@@ -31,18 +31,18 @@ GIT SYNC: origin/main == local HEAD (e500502) — подтверждено git l
 title всегда = символ_роли + game_nick; для точной истории участника согласовано добавление
 target_id в audit_log — реализуется в подэтапе 2.3.2).
 
-Подэтап 2.3.1 — смена игрового ника участника прямо из карточки (админ-действие):
-- `member_card_kb()` — добавлена кнопка «✏️ Ник», кнопка роли переименована в «⭐ Роль»
-  (сама функция смены роли не менялась, работает с v1.2.8).
-- Новый FSM `MemberNickEdit.waiting_name` (bot/states/members.py).
-- `cb_mem_nick_start` → `fsm_mem_nick_enter` (bot/handlers/members.py): валидация через
-  `validate_name`, сохранение `user_service.set_game_nick`, синхронизация Telegram
-  custom_title через `sync_admin_title`, запись в audit_log (`MEMBER_NICK_CHANGE`),
-  показ обновлённой карточки через существующую `member_card_kb` — новых карточек/меню нет.
+Подэтапы 2.3.1–2.3.6 завершены:
+- 2.3.1 ✅ смена ника участника из карточки
+- 2.3.2 ✅ target_id в audit_service.log() для смены роли, ника, удаления
+- 2.3.3 ✅ UI предупреждений: warnings_kb, MemberWarnAdd FSM, 4 handlers
+- 2.3.4 ✅ UI заметок: notes_kb, MemberNoteAdd FSM, 4 handlers
+- 2.3.5 ✅ История участника: cb_mem_history, get_user_history(uid, limit=20)
+- 2.3.6 ✅ Финальная сверка прав: все handlers через _check_admin(); суперпользователь
+          защищён от предупреждений; cancel handler покрывает все FSM.
 
-Следующие подэтапы (2.3.2–2.3.7): target_id в audit_log + таблицы warnings/admin_notes,
-предупреждения, заметки администрации, история участника, финальная сверка прав доступа.
-См. `.agents/memory/change_log.md` для истории Этапа 2.2 и более ранних этапов.
+Этап 2.3 «Полный центр управления участником» — ЗАВЕРШЁН.
+Следующий этап: 2.4 или по заданию пользователя.
+См. `.agents/memory/change_log.md` для полной истории.
 
 ## База данных
 

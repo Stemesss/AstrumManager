@@ -38,6 +38,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.admin_panel import AdminBtn
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
+from bot.database.db import Database
 from bot.keyboards.members import (
     PAGE_SIZE,
     MemberBtn,
@@ -46,14 +47,17 @@ from bot.keyboards.members import (
     delete_card_kb,
     delete_list_kb,
     delete_search_result_kb,
+    history_kb,
     member_card_kb,
     members_list_kb,
     members_menu_kb,
     nick_report_kb,
+    notes_kb,
     role_select_kb,
     season_confirm_kb,
     view_card_kb,
     view_list_kb,
+    warnings_kb,
 )
 from bot.keyboards.nav import CANCEL_KB
 from bot.models.audit import AuditAction
@@ -63,7 +67,7 @@ from bot.services.stats_service import StatsService
 from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 from bot.handlers.synctitles import run_sync_titles
-from bot.states.members import MemberDelete, MemberNickEdit
+from bot.states.members import MemberDelete, MemberNickEdit, MemberNoteAdd, MemberWarnAdd
 from bot.utils.nick_format import validate_name
 from bot.utils.roles import ROLE_DISPLAY_ICONS, ROLE_ORDER, assignable_roles, can_assign, role_label
 from bot.utils.sync_title import build_admin_title, sync_admin_title
@@ -400,6 +404,7 @@ async def cb_mem_set(
             f"{role_label(actor_role)} {actor_nick} назначил роль "
             f"{role_label(confirmed)} участнику {target_nick}"
         ),
+        target_id=target_id,
     )
 
     logger.info(
@@ -511,6 +516,7 @@ async def fsm_mem_nick_enter(
             f"{role_label(actor_role)} {actor_nick} изменил ник участнику "
             f"{old_title} → {new_title}"
         ),
+        target_id=target_id,
     )
 
     logger.info(
@@ -732,6 +738,7 @@ async def cb_mem_del_ok(
         role=actor_role,
         action_type=AuditAction.MEMBER_DELETE,
         description=f"{role_label(actor_role)} {actor_nick} удалил участника {target_name} (ID: {target_id})",
+        target_id=target_id,
     )
 
     logger.info("Участник %s (%s) удалён администратором %s", target_id, target_name, actor_id)
@@ -1305,3 +1312,416 @@ async def cb_mem_nick_remind(
         await callback.message.edit_text(result_text, reply_markup=nick_report_kb())
     except Exception:
         await callback.message.answer(result_text, reply_markup=nick_report_kb())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Предупреждения участника
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _show_warnings(
+    callback: CallbackQuery,
+    uid: int,
+    db: Database,
+    user_service: UserService,
+) -> None:
+    """Вспомогательная функция: показывает список предупреждений участника."""
+    u = await _find_user(user_service, uid)
+    name = _display_name(u) if u else str(uid)
+    warn_list = await db.list_warnings(uid)
+    count = len(warn_list)
+
+    if count == 0:
+        header = f"⚠️ <b>Предупреждения участника «{name}»</b>\n\nПредупреждений нет."
+    else:
+        header = (
+            f"⚠️ <b>Предупреждения участника «{name}»</b>\n\n"
+            f"Всего: <b>{count}</b>\n\n"
+        )
+        for w in warn_list:
+            header += f"• <b>#{w['id']}</b> {w['reason']} <i>({w['created_at'][:10]})</i>\n"
+
+    try:
+        await callback.message.edit_text(header, reply_markup=warnings_kb(uid, warn_list))
+    except Exception:
+        await callback.message.answer(header, reply_markup=warnings_kb(uid, warn_list))
+
+
+@router.callback_query(F.data.startswith("mem:warnings:"))
+async def cb_mem_warnings(
+    callback: CallbackQuery,
+    user_service: UserService,
+    db: Database,
+) -> None:
+    """Показывает список предупреждений участника."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    uid = int(callback.data.split(":")[2])
+    await _show_warnings(callback, uid, db, user_service)
+
+
+@router.callback_query(F.data.startswith("mem:warn_add:"))
+async def cb_mem_warn_add_start(
+    callback: CallbackQuery,
+    user_service: UserService,
+    state: FSMContext,
+) -> None:
+    """Начинает FSM выдачи предупреждения: запрашивает причину."""
+    if not await _check_admin(callback, user_service):
+        return
+    uid = int(callback.data.split(":")[2])
+    if uid == _SUPERUSER_ID:
+        await callback.answer("🔒 Нельзя выдать предупреждение суперпользователю.", show_alert=True)
+        return
+    await callback.answer()
+    await state.set_state(MemberWarnAdd.waiting_reason)
+    await state.update_data(target_id=uid)
+    u = await _find_user(user_service, uid)
+    name = _display_name(u) if u else str(uid)
+    try:
+        await callback.message.edit_text(
+            f"⚠️ <b>Выдача предупреждения</b>\n\n"
+            f"Участник: <b>{name}</b>\n\n"
+            f"Введите причину предупреждения:",
+            reply_markup=CANCEL_KB,
+        )
+    except Exception:
+        await callback.message.answer(
+            f"⚠️ <b>Выдача предупреждения</b>\n\n"
+            f"Участник: <b>{name}</b>\n\n"
+            f"Введите причину предупреждения:",
+            reply_markup=CANCEL_KB,
+        )
+
+
+@router.message(MemberWarnAdd.waiting_reason)
+async def fsm_mem_warn_reason(
+    message: Message,
+    state: FSMContext,
+    user_service: UserService,
+    audit_service: AuditService,
+    db: Database,
+) -> None:
+    """Сохраняет предупреждение и показывает обновлённый список."""
+    data = await state.get_data()
+    target_id = data.get("target_id")
+
+    actor_id = message.from_user.id
+    actor_role = await user_service.get_role(actor_id)
+    if actor_role not in UserRole.admin_roles():
+        await state.clear()
+        await message.answer("🔒 Недостаточно прав.", reply_markup=MAIN_KEYBOARD)
+        return
+
+    if not target_id:
+        await state.clear()
+        await message.answer("❌ Ошибка: участник не найден.")
+        return
+
+    reason = (message.text or "").strip()
+    if not reason:
+        await message.answer("❌ Причина не может быть пустой. Введите причину ещё раз:")
+        return  # не очищаем state — пользователь может повторить ввод
+
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+
+    u = await _find_user(user_service, target_id)
+    target_name = _display_name(u) if u else str(target_id)
+
+    await db.add_warning(user_id=target_id, issued_by=actor_id, reason=reason)
+
+    await audit_service.log(
+        user_id=actor_id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.MEMBER_WARNING_ADD,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} выдал предупреждение "
+            f"участнику {target_name}: {reason}"
+        ),
+        target_id=target_id,
+    )
+
+    await state.clear()
+    logger.info("warn_add: actor=%s target=%s reason=%r", actor_id, target_id, reason)
+
+    warn_list = await db.list_warnings(target_id)
+    count = len(warn_list)
+    header = (
+        f"✅ <b>Предупреждение выдано</b>\n\n"
+        f"⚠️ <b>Предупреждения участника «{target_name}»</b>\n\n"
+        f"Всего: <b>{count}</b>\n\n"
+    )
+    for w in warn_list:
+        header += f"• <b>#{w['id']}</b> {w['reason']} <i>({w['created_at'][:10]})</i>\n"
+
+    await message.answer(header, reply_markup=warnings_kb(target_id, warn_list))
+
+
+@router.callback_query(F.data.startswith("mem:warn_del:"))
+async def cb_mem_warn_del(
+    callback: CallbackQuery,
+    user_service: UserService,
+    audit_service: AuditService,
+    db: Database,
+) -> None:
+    """Снимает предупреждение и обновляет список."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+
+    parts = callback.data.split(":")
+    uid = int(parts[2])
+    wid = int(parts[3])
+
+    actor_id = callback.from_user.id
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+    actor_role = await user_service.get_role(actor_id)
+
+    u = await _find_user(user_service, uid)
+    target_name = _display_name(u) if u else str(uid)
+
+    w = await db.get_warning(wid)
+    reason = w["reason"] if w else "?"
+
+    await db.remove_warning(wid)
+
+    await audit_service.log(
+        user_id=actor_id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.MEMBER_WARNING_REMOVE,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} снял предупреждение #{wid} "
+            f"у участника {target_name}: {reason}"
+        ),
+        target_id=uid,
+    )
+
+    logger.info("warn_del: actor=%s target=%s wid=%s", actor_id, uid, wid)
+
+    await _show_warnings(callback, uid, db, user_service)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Заметки администрации об участнике
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _show_notes(
+    callback: CallbackQuery,
+    uid: int,
+    db: Database,
+    user_service: UserService,
+) -> None:
+    """Вспомогательная функция: показывает заметки администрации об участнике."""
+    u = await _find_user(user_service, uid)
+    name = _display_name(u) if u else str(uid)
+    note_list = await db.list_notes(uid)
+    count = len(note_list)
+
+    if count == 0:
+        header = f"📝 <b>Заметки об участнике «{name}»</b>\n\nЗаметок нет."
+    else:
+        header = (
+            f"📝 <b>Заметки об участнике «{name}»</b>\n\n"
+            f"Всего: <b>{count}</b>\n\n"
+        )
+        for n in note_list:
+            header += f"• <b>#{n['id']}</b> {n['text']} <i>({n['created_at'][:10]})</i>\n"
+
+    try:
+        await callback.message.edit_text(header, reply_markup=notes_kb(uid, note_list))
+    except Exception:
+        await callback.message.answer(header, reply_markup=notes_kb(uid, note_list))
+
+
+@router.callback_query(F.data.startswith("mem:notes:"))
+async def cb_mem_notes(
+    callback: CallbackQuery,
+    user_service: UserService,
+    db: Database,
+) -> None:
+    """Показывает заметки администрации об участнике."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    uid = int(callback.data.split(":")[2])
+    await _show_notes(callback, uid, db, user_service)
+
+
+@router.callback_query(F.data.startswith("mem:note_add:"))
+async def cb_mem_note_add_start(
+    callback: CallbackQuery,
+    user_service: UserService,
+    state: FSMContext,
+) -> None:
+    """Начинает FSM добавления заметки: запрашивает текст."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+    uid = int(callback.data.split(":")[2])
+    await state.set_state(MemberNoteAdd.waiting_text)
+    await state.update_data(target_id=uid)
+    u = await _find_user(user_service, uid)
+    name = _display_name(u) if u else str(uid)
+    try:
+        await callback.message.edit_text(
+            f"📝 <b>Добавление заметки</b>\n\n"
+            f"Участник: <b>{name}</b>\n\n"
+            f"Введите текст заметки:",
+            reply_markup=CANCEL_KB,
+        )
+    except Exception:
+        await callback.message.answer(
+            f"📝 <b>Добавление заметки</b>\n\n"
+            f"Участник: <b>{name}</b>\n\n"
+            f"Введите текст заметки:",
+            reply_markup=CANCEL_KB,
+        )
+
+
+@router.message(MemberNoteAdd.waiting_text)
+async def fsm_mem_note_text(
+    message: Message,
+    state: FSMContext,
+    user_service: UserService,
+    audit_service: AuditService,
+    db: Database,
+) -> None:
+    """Сохраняет заметку и показывает обновлённый список."""
+    data = await state.get_data()
+    target_id = data.get("target_id")
+
+    actor_id = message.from_user.id
+    actor_role = await user_service.get_role(actor_id)
+    if actor_role not in UserRole.admin_roles():
+        await state.clear()
+        await message.answer("🔒 Недостаточно прав.", reply_markup=MAIN_KEYBOARD)
+        return
+
+    if not target_id:
+        await state.clear()
+        await message.answer("❌ Ошибка: участник не найден.")
+        return
+
+    text = (message.text or "").strip()
+    if not text:
+        await message.answer("❌ Текст заметки не может быть пустым. Введите текст ещё раз:")
+        return  # не очищаем state — пользователь может повторить ввод
+
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+
+    u = await _find_user(user_service, target_id)
+    target_name = _display_name(u) if u else str(target_id)
+
+    await db.add_note(user_id=target_id, author_id=actor_id, text=text)
+
+    await audit_service.log(
+        user_id=actor_id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.MEMBER_NOTE_ADD,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} добавил заметку "
+            f"об участнике {target_name}: {text[:80]}"
+        ),
+        target_id=target_id,
+    )
+
+    await state.clear()
+    logger.info("note_add: actor=%s target=%s", actor_id, target_id)
+
+    note_list = await db.list_notes(target_id)
+    count = len(note_list)
+    header = (
+        f"✅ <b>Заметка добавлена</b>\n\n"
+        f"📝 <b>Заметки об участнике «{target_name}»</b>\n\n"
+        f"Всего: <b>{count}</b>\n\n"
+    )
+    for n in note_list:
+        header += f"• <b>#{n['id']}</b> {n['text']} <i>({n['created_at'][:10]})</i>\n"
+
+    await message.answer(header, reply_markup=notes_kb(target_id, note_list))
+
+
+@router.callback_query(F.data.startswith("mem:note_del:"))
+async def cb_mem_note_del(
+    callback: CallbackQuery,
+    user_service: UserService,
+    audit_service: AuditService,
+    db: Database,
+) -> None:
+    """Удаляет заметку и обновляет список."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+
+    parts = callback.data.split(":")
+    uid = int(parts[2])
+    nid = int(parts[3])
+
+    actor_id = callback.from_user.id
+    actor_nick = await user_service.get_game_nick(actor_id) or str(actor_id)
+    actor_role = await user_service.get_role(actor_id)
+
+    u = await _find_user(user_service, uid)
+    target_name = _display_name(u) if u else str(uid)
+
+    n = await db.get_note(nid)
+    note_text = n["text"] if n else "?"
+
+    await db.remove_note(nid)
+
+    await audit_service.log(
+        user_id=actor_id,
+        game_nick=actor_nick,
+        role=actor_role,
+        action_type=AuditAction.MEMBER_NOTE_REMOVE,
+        description=(
+            f"{role_label(actor_role)} {actor_nick} удалил заметку #{nid} "
+            f"об участнике {target_name}: {note_text[:80]}"
+        ),
+        target_id=uid,
+    )
+
+    logger.info("note_del: actor=%s target=%s nid=%s", actor_id, uid, nid)
+
+    await _show_notes(callback, uid, db, user_service)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# История участника (audit_log)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("mem:history:"))
+async def cb_mem_history(
+    callback: CallbackQuery,
+    user_service: UserService,
+    db: Database,
+) -> None:
+    """Показывает историю действий участника из audit_log."""
+    if not await _check_admin(callback, user_service):
+        return
+    await callback.answer()
+
+    uid = int(callback.data.split(":")[2])
+    u = await _find_user(user_service, uid)
+    name = _display_name(u) if u else str(uid)
+
+    records = await db.get_user_history(uid, limit=20)
+
+    if not records:
+        text = f"📋 <b>История участника «{name}»</b>\n\nЗаписей нет."
+    else:
+        lines = [f"📋 <b>История участника «{name}»</b>\n<i>(последние {len(records)} записей)</i>\n"]
+        for r in records:
+            date = r["created_at"][:10]
+            lines.append(f"• <b>{date}</b> {r['description']}")
+        text = "\n".join(lines)
+        if len(text) > 4000:
+            text = text[:4000] + "\n…\n<i>(история обрезана)</i>"
+
+    try:
+        await callback.message.edit_text(text, reply_markup=history_kb(uid))
+    except Exception:
+        await callback.message.answer(text, reply_markup=history_kb(uid))

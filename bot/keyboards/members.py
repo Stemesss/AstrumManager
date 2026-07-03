@@ -46,6 +46,34 @@ class MemberBtn:
         return f"mem:stats:{uid}"
 
     @staticmethod
+    def warnings(uid: int) -> str:
+        return f"mem:warnings:{uid}"
+
+    @staticmethod
+    def warn_add(uid: int) -> str:
+        return f"mem:warn_add:{uid}"
+
+    @staticmethod
+    def warn_del(uid: int, wid: int) -> str:
+        return f"mem:warn_del:{uid}:{wid}"
+
+    @staticmethod
+    def notes(uid: int) -> str:
+        return f"mem:notes:{uid}"
+
+    @staticmethod
+    def note_add(uid: int) -> str:
+        return f"mem:note_add:{uid}"
+
+    @staticmethod
+    def note_del(uid: int, nid: int) -> str:
+        return f"mem:note_del:{uid}:{nid}"
+
+    @staticmethod
+    def history(uid: int) -> str:
+        return f"mem:history:{uid}"
+
+    @staticmethod
     def del_list(page: int) -> str:
         return f"mem:del_list:{page}"
 
@@ -212,13 +240,67 @@ def member_card_kb(user_id: int, page: int = 0) -> InlineKeyboardMarkup:
     """
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="✏️ Ник",         callback_data=MemberBtn.nick(user_id)),
-            InlineKeyboardButton(text="⭐ Роль",        callback_data=MemberBtn.role(user_id)),
+            InlineKeyboardButton(text="✏️ Ник",  callback_data=MemberBtn.nick(user_id)),
+            InlineKeyboardButton(text="⭐ Роль", callback_data=MemberBtn.role(user_id)),
         ],
-        [InlineKeyboardButton(text="📊 Статистика",  callback_data=MemberBtn.stats(user_id))],
+        [
+            InlineKeyboardButton(text="📊 Статистика",     callback_data=MemberBtn.stats(user_id)),
+            InlineKeyboardButton(text="⚠️ Предупреждения", callback_data=MemberBtn.warnings(user_id)),
+        ],
+        [
+            InlineKeyboardButton(text="📝 Заметки",  callback_data=MemberBtn.notes(user_id)),
+            InlineKeyboardButton(text="📋 История",  callback_data=MemberBtn.history(user_id)),
+        ],
         [InlineKeyboardButton(text="🗑 Удалить участника", callback_data=MemberBtn.del_card(user_id))],
-        [InlineKeyboardButton(text="⬅️ Назад",           callback_data=MemberBtn.list(page))],
+        [InlineKeyboardButton(text="⬅️ Назад",            callback_data=MemberBtn.list(page))],
     ])
+
+
+def notes_kb(uid: int, notes_list: list) -> InlineKeyboardMarkup:
+    """Клавиатура раздела заметок администрации об участнике."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for n in notes_list:
+        text_short = (n["text"][:28] + "…") if len(n["text"]) > 28 else n["text"]
+        rows.append([InlineKeyboardButton(
+            text=f"🗑 #{n['id']} {text_short}",
+            callback_data=MemberBtn.note_del(uid, n["id"]),
+        )])
+    rows.append([InlineKeyboardButton(
+        text="➕ Добавить заметку",
+        callback_data=MemberBtn.note_add(uid),
+    )])
+    rows.append([InlineKeyboardButton(
+        text="⬅️ Назад к карточке",
+        callback_data=MemberBtn.card(uid),
+    )])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def history_kb(uid: int) -> InlineKeyboardMarkup:
+    """Клавиатура раздела истории участника."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад к карточке", callback_data=MemberBtn.card(uid))],
+    ])
+
+
+def warnings_kb(uid: int, warn_list: list) -> InlineKeyboardMarkup:
+    """Клавиатура раздела предупреждений участника."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for w in warn_list:
+        reason_short = (w["reason"][:28] + "…") if len(w["reason"]) > 28 else w["reason"]
+        rows.append([InlineKeyboardButton(
+            text=f"🗑 #{w['id']} {reason_short}",
+            callback_data=MemberBtn.warn_del(uid, w["id"]),
+        )])
+    rows.append([InlineKeyboardButton(
+        text="➕ Выдать предупреждение",
+        callback_data=MemberBtn.warn_add(uid),
+    )])
+    rows.append([InlineKeyboardButton(
+        text="⬅️ Назад к карточке",
+        callback_data=MemberBtn.card(uid),
+    )])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def role_select_kb(actor_role: UserRole, target_id: int) -> InlineKeyboardMarkup:
