@@ -32,7 +32,13 @@ logger = logging.getLogger(__name__)
 
 _ADMIN_ROLES = UserRole.admin_roles()
 
-_MENU_TEXT = "📋 <b>Журнал действий</b>\n\nВыберите категорию для просмотра:"
+_DIVIDER = "━━━━━━━━━━━━━━━━"
+
+_MENU_TEXT = (
+    "📋 <b>Журнал действий</b>\n\n"
+    f"{_DIVIDER}\n\n"
+    "Выберите категорию для просмотра:"
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -59,7 +65,11 @@ def _format_entry(row) -> str:
 
 def _page_text(category: str, records: list, total: int) -> str:
     label = CATEGORY_LABELS.get(category, category)
-    header = f"📋 <b>Журнал — {label}</b>  •  Записей: {total}\n\n"
+    header = (
+        f"📋 <b>Журнал — {label}</b>\n"
+        f"🗂 Записей: {total}\n\n"
+        f"{_DIVIDER}\n\n"
+    )
     return header + "\n\n".join(_format_entry(r) for r in records)
 
 
@@ -119,7 +129,7 @@ async def cb_audit_view(
     if not records:
         label = CATEGORY_LABELS.get(category, category)
         await callback.message.edit_text(
-            f"📋 <b>Журнал — {label}</b>\n\nЗаписей пока нет.",
+            f"📋 <b>Журнал — {label}</b>\n\n{_DIVIDER}\n\nЗаписей пока нет.",
             reply_markup=audit_page_kb(category, 0, 1),
         )
         return
@@ -184,7 +194,9 @@ async def fsm_audit_search(
 
     entries = "\n\n".join(_format_entry(r) for r in results)
     await message.answer(
-        f"🔍 <b>Результаты: «{query}»</b>  •  Найдено: {len(results)}\n\n"
+        f"🔍 <b>Результаты: «{query}»</b>\n"
+        f"Найдено: {len(results)}\n\n"
+        f"{_DIVIDER}\n\n"
         + entries,
         reply_markup=audit_search_result_kb(),
     )
@@ -233,6 +245,7 @@ async def cb_audit_clear_execute(
     await callback.message.edit_text(
         "📋 <b>Журнал действий</b>\n\n"
         f"✅ Журнал очищен. Удалено записей: <b>{deleted}</b>.\n\n"
+        f"{_DIVIDER}\n\n"
         "Выберите категорию для просмотра:",
         reply_markup=audit_menu_kb(role),
     )

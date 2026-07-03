@@ -80,8 +80,11 @@ _ICONS: dict[UserRole, str] = ROLE_DISPLAY_ICONS
 
 _SUPERUSER_ID = 8490615925
 
+_DIVIDER = "━━━━━━━━━━━━━━━━"
+
 _MENU_TEXT = (
     "👥 <b>Управление участниками</b>\n\n"
+    f"{_DIVIDER}\n\n"
     "Выберите действие:"
 )
 
@@ -106,23 +109,18 @@ def _effective_role(actor_id: int, actor_role: UserRole) -> UserRole:
     return UserRole.LEADER if actor_id == _SUPERUSER_ID else actor_role
 
 
-_DIVIDER = "━━━━━━━━━━━━━━━━"
-
-
 async def _card_text(u: User, user_service: UserService, stats_service: StatsService) -> str:
     """Единая карточка участника — используется и в администрировании, и в просмотре."""
-    icon = _ICONS.get(u.role, "◇")
-    username_line = f"@{u.username}" if u.username else "—"
+    username_line = f"@{u.username}" if u.username else u.first_name
     days = await user_service.get_days_in_clan(u.telegram_id)
     score = (await stats_service.user_activity(u.telegram_id))["score"]
     title = build_admin_title(u.role, u.game_nick) if u.game_nick else ""
 
     return (
-        f"👤 <b>{u.first_name}</b>\n"
-        f"🎮 {u.game_nick or '—'}\n\n"
+        f"{role_label(u.role)}\n"
+        f"🎮 <b>{u.game_nick or u.first_name}</b>\n\n"
         f"{_DIVIDER}\n\n"
         f"🏷 <b>Telegram-титул:</b> {title or '—'}\n"
-        f"⭐ <b>Роль:</b> {icon} {u.role.value}\n"
         f"🟢 <b>Статус:</b> Активен\n\n"
         f"{_DIVIDER}\n\n"
         f"🏆 <b>Очков активности:</b> {score}\n"
@@ -160,7 +158,12 @@ async def _show_list(cb: CallbackQuery, user_service: UserService, page: int) ->
     all_users = _sort_users([u for u in await user_service.get_all_users() if u.game_nick])
     total = len(all_users)
     page_users = all_users[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
-    text = f"👥 <b>Участники клана</b>\n\nВсего: {total}\n\nВыберите участника:"
+    text = (
+        f"👥 <b>Участники клана</b>\n\n"
+        f"{_DIVIDER}\n\n"
+        f"👤 Всего: {total}\n\n"
+        "Выберите участника:"
+    )
     kb = members_list_kb(page_users, page, total)
     try:
         await cb.message.edit_text(text, reply_markup=kb)
@@ -176,7 +179,8 @@ async def _show_delete_list(
     page_users = all_users[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
     text = (
         f"🗑️ <b>Удалить участника</b>\n\n"
-        f"Всего: {total}\n\n"
+        f"{_DIVIDER}\n\n"
+        f"👤 Всего: {total}\n\n"
         "Выберите участника для удаления:"
     )
     kb = delete_list_kb(page_users, page, total)
@@ -204,7 +208,12 @@ async def handle_members_view(message: Message, user_service: UserService) -> No
         await message.answer("👥 <b>Участники</b>\n\nСписок пока пуст.")
         return
     page_users = all_users[:PAGE_SIZE]
-    text = f"👥 <b>Участники клана</b>\n\nВсего: {total}\n\nВыберите участника:"
+    text = (
+        f"👥 <b>Участники клана</b>\n\n"
+        f"{_DIVIDER}\n\n"
+        f"👤 Всего: {total}\n\n"
+        "Выберите участника:"
+    )
     await message.answer(text, reply_markup=view_list_kb(page_users, 0, total))
 
 
@@ -214,7 +223,12 @@ async def cb_memv_list(callback: CallbackQuery, user_service: UserService) -> No
     all_users = await _view_list_users(user_service)
     total = len(all_users)
     page_users = all_users[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
-    text = f"👥 <b>Участники клана</b>\n\nВсего: {total}\n\nВыберите участника:"
+    text = (
+        f"👥 <b>Участники клана</b>\n\n"
+        f"{_DIVIDER}\n\n"
+        f"👤 Всего: {total}\n\n"
+        "Выберите участника:"
+    )
     kb = view_list_kb(page_users, page, total)
     await callback.answer()
     try:
@@ -566,14 +580,18 @@ async def cb_mem_stats(
     lines = [
         f"📊 <b>Статистика — {nick}</b>",
         "",
-        f"🏠 Дней в клане: <b>{days}</b>",
-        f"⚡️ Очки активности: <b>{score}</b>",
+        _DIVIDER,
         "",
-        "Публикации:",
-        f"  📰 Новостей: <b>{n_news}</b>",
-        f"  📚 Гайдов: <b>{n_guide}</b>",
-        f"  📅 Событий: <b>{n_event}</b>",
-        f"  📸 Скриншотов: <b>{n_shot}</b>",
+        f"📅 Дней в клане: <b>{days}</b>",
+        f"⭐ Очков активности: <b>{score}</b>",
+        "",
+        _DIVIDER,
+        "",
+        "📦 <b>Публикации</b>",
+        f"📰 Новостей: <b>{n_news}</b>",
+        f"📚 Гайдов: <b>{n_guide}</b>",
+        f"📅 Событий: <b>{n_event}</b>",
+        f"📸 Скриншотов: <b>{n_shot}</b>",
     ]
 
     await callback.answer()
@@ -669,15 +687,15 @@ async def cb_mem_del_card(callback: CallbackQuery, user_service: UserService) ->
 
     actor_id = callback.from_user.id
     name = _display_name(u)
-    icon = _ICONS.get(u.role, "◇")
-    username_line = f"@{u.username}" if u.username else "(без юзернейма)"
+    username_line = f"@{u.username}" if u.username else u.first_name
 
     text = (
         f"🗑️ <b>Удалить участника?</b>\n\n"
-        f"👤 <b>{name}</b>\n"
-        f"{icon} {u.role.value}\n"
-        f"{username_line}\n"
-        f"ID: <code>{u.telegram_id}</code>\n\n"
+        f"{role_label(u.role)}\n"
+        f"🎮 <b>{name}</b>\n"
+        f"📱 {username_line}\n"
+        f"🆔 <code>{u.telegram_id}</code>\n\n"
+        f"{_DIVIDER}\n\n"
         "После удаления будут стёрты:\n"
         "• запись участника\n"
         "• вся история активности\n"

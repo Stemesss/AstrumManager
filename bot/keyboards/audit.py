@@ -11,20 +11,20 @@ def audit_menu_kb(role: UserRole) -> InlineKeyboardMarkup:
     Кнопка «Очистить» показывается всем административным ролям.
     """
     rows = [
-        [InlineKeyboardButton(text="📋 Последние действия", callback_data="alog:cat:recent:0")],
+        [InlineKeyboardButton(text="🕘 Последние действия", callback_data="alog:cat:recent:0")],
+        [InlineKeyboardButton(text="👥 Участники",          callback_data="alog:cat:members:0")],
         [
-            InlineKeyboardButton(text="👥 Участники",  callback_data="alog:cat:members:0"),
             InlineKeyboardButton(text="📰 Новости",    callback_data="alog:cat:news:0"),
-        ],
-        [
             InlineKeyboardButton(text="📅 События",    callback_data="alog:cat:events:0"),
-            InlineKeyboardButton(text="📚 Гайды",      callback_data="alog:cat:guides:0"),
         ],
         [
+            InlineKeyboardButton(text="📚 Гайды",      callback_data="alog:cat:guides:0"),
             InlineKeyboardButton(text="📸 Скриншоты",  callback_data="alog:cat:screenshots:0"),
-            InlineKeyboardButton(text="🔍 Поиск",      callback_data="alog:search"),
         ],
-        [InlineKeyboardButton(text="📖 Все записи",   callback_data="alog:cat:all:0")],
+        [
+            InlineKeyboardButton(text="🔍 Поиск",      callback_data="alog:search"),
+            InlineKeyboardButton(text="📖 Все записи", callback_data="alog:cat:all:0"),
+        ],
     ]
     if role in UserRole.admin_roles():
         rows.append([

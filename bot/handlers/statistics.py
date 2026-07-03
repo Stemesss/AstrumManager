@@ -28,7 +28,13 @@ logger = logging.getLogger(__name__)
 
 _WIP = "🚧 Раздел находится в разработке."
 
-_MENU_TEXT = "📈 <b>Центр статистики</b>"
+_DIVIDER = "━━━━━━━━━━━━━━━━"
+
+_MENU_TEXT = (
+    "📈 <b>Центр статистики</b>\n\n"
+    f"{_DIVIDER}\n\n"
+    "Выберите раздел:"
+)
 
 _SECTION_NAMES: dict[str, str] = {
     StatisticsBtn.BEST_MONTH:       "🏆 Лучший участник месяца",
@@ -62,6 +68,7 @@ def _fmt_winner_card(icon: str, title: str, u: UserActivity) -> str:
         f"{icon} <b>{title}</b>\n\n"
         f"👤 {u.game_nick}\n"
         f"⭐ {u.score} очков\n\n"
+        f"{_DIVIDER}\n\n"
         f"📰 Новостей: {u.news_count}\n"
         f"📚 Гайдов: {u.guides_count}\n"
         f"📸 Скриншотов: {u.screenshots_count}\n"
@@ -307,7 +314,7 @@ def _fmt_top10_card(users: list) -> str:
         "📰 Новость = 5  📅 Событие = 8\n"
         "📚 Гайд = 10  📸 Скриншот = 2</i>"
     )
-    return f"🏆 <b>Топ-10 участников</b>\n\n{lines}\n\n{formula}"
+    return f"🏆 <b>Топ-10 участников</b>\n\n{lines}\n\n{_DIVIDER}\n\n{formula}"
 
 
 @router.callback_query(F.data == StatisticsBtn.TOP10)
@@ -336,6 +343,7 @@ def _fmt_growth_card(g) -> str:
         f"📈 <b>Рост клана</b>\n\n"
         f"👥 Всего участников: {g.total}\n"
         f"📅 Сегодня: +{g.today}  •  За месяц: +{g.month}\n\n"
+        f"{_DIVIDER}\n\n"
         f"Последние {days} дней\n"
         f"{bar}"
     )
@@ -373,7 +381,7 @@ def _fmt_hall_of_fame_card(
     best_events = events_s.top_authors[0].name      if events_s.top_authors      else None
 
     rows = [
-        "👑 <b>Зал славы</b>",
+        f"👑 <b>Зал славы</b>\n\n{_DIVIDER}",
         _fmt_hof_row("🥇", "Лучший участник месяца",
                      month_winner.game_nick if month_winner else None,
                      f"{month_winner.score} очков" if month_winner else ""),

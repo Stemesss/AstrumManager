@@ -3,11 +3,21 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.models.user import User, UserRole
-from bot.utils.roles import ROLE_DISPLAY_ICONS, assignable_roles
+from bot.utils.roles import ROLE_DISPLAY_ICONS, assignable_roles, role_label
 
 PAGE_SIZE = 10
 
 _ICONS: dict[UserRole, str] = ROLE_DISPLAY_ICONS
+
+
+def _member_label(u: User) -> str:
+    """Компактная подпись участника для списков: значок+роль, ник, @username/имя."""
+    nick = (u.game_nick or u.first_name)[:20]
+    raw_ident = u.username or u.first_name
+    if raw_ident.lower() == nick.lower():
+        return f"{role_label(u.role)} • {nick}"
+    ident = (f"@{u.username}" if u.username else u.first_name)[:20]
+    return f"{role_label(u.role)} • {nick} ({ident})"
 
 
 class MemberBtn:
@@ -89,14 +99,14 @@ class MemberBtn:
 def members_menu_kb() -> InlineKeyboardMarkup:
     """Главное меню раздела «Участники» — кнопки сгруппированы по смыслу."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Просмотреть участников",  callback_data=MemberBtn.list(0))],
+        [InlineKeyboardButton(text="👥 Список участников",       callback_data=MemberBtn.list(0))],
         [
             InlineKeyboardButton(text="📋 Отчёт",                callback_data=MemberBtn.NICK_REPORT),
             InlineKeyboardButton(text="🧹 Очистить",             callback_data=MemberBtn.CLEAN_ABSENT),
         ],
         [
-            InlineKeyboardButton(text="🔄 Синхронизация",        callback_data=MemberBtn.SYNC_TITLES),
-            InlineKeyboardButton(text="🔄 Новый сезон",          callback_data=MemberBtn.SEASON),
+            InlineKeyboardButton(text="🔁 Синхронизация",        callback_data=MemberBtn.SYNC_TITLES),
+            InlineKeyboardButton(text="🆕 Новый сезон",          callback_data=MemberBtn.SEASON),
         ],
         [InlineKeyboardButton(text="🗑️ Удалить участника",       callback_data=MemberBtn.del_list(0))],
         [InlineKeyboardButton(text="❌ Закрыть",                 callback_data=MemberBtn.CLOSE)],
@@ -108,11 +118,9 @@ def members_list_kb(users: list[User], page: int, total: int) -> InlineKeyboardM
     rows: list[list[InlineKeyboardButton]] = []
 
     for u in users:
-        icon = _ICONS.get(u.role, "👤")
-        name = u.game_nick or u.first_name
         rows.append([
             InlineKeyboardButton(
-                text=f"{icon} {name}",
+                text=_member_label(u),
                 callback_data=MemberBtn.card(u.telegram_id),
             ),
         ])
@@ -127,10 +135,8 @@ def delete_list_kb(users: list[User], page: int, total: int) -> InlineKeyboardMa
     rows: list[list[InlineKeyboardButton]] = []
 
     for u in users:
-        icon = _ICONS.get(u.role, "◇")
-        name = u.game_nick or u.first_name
         rows.append([InlineKeyboardButton(
-            text=f"🗑️ {icon} {name}",
+            text=f"🗑️ {_member_label(u)}",
             callback_data=MemberBtn.del_card(u.telegram_id),
         )])
 
@@ -155,10 +161,8 @@ def delete_search_result_kb(users: list[User]) -> InlineKeyboardMarkup:
     """Результаты поиска для удаления."""
     rows: list[list[InlineKeyboardButton]] = []
     for u in users:
-        icon = _ICONS.get(u.role, "◇")
-        name = u.game_nick or u.first_name
         rows.append([InlineKeyboardButton(
-            text=f"🗑️ {icon} {name}",
+            text=f"🗑️ {_member_label(u)}",
             callback_data=MemberBtn.del_card(u.telegram_id),
         )])
     rows.append([InlineKeyboardButton(text="⬅️ К списку участников", callback_data=MemberBtn.del_list(0))])
@@ -211,11 +215,9 @@ def view_list_kb(users: list[User], page: int, total: int) -> InlineKeyboardMark
     rows: list[list[InlineKeyboardButton]] = []
 
     for u in users:
-        icon = _ICONS.get(u.role, "👤")
-        name = u.game_nick or u.first_name
         rows.append([
             InlineKeyboardButton(
-                text=f"{icon} {name}",
+                text=_member_label(u),
                 callback_data=MemberViewBtn.card(u.telegram_id, page),
             ),
         ])
