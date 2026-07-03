@@ -10,8 +10,9 @@ from bot.models.user import User, UserRole
 class UserService:
     """Бизнес-логика для работы с пользователями."""
 
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, owner_id: int | None = None) -> None:
         self._db = db
+        self._owner_id = owner_id
 
     def _row_to_user(self, tg_user: TgUser, row) -> User:
         """Конвертирует строку БД + TgUser в модель User."""
@@ -147,8 +148,7 @@ class UserService:
         Возвращает {'ok': bool, 'error': str | None}.
         Запрещено удалять: суперпользователя, самого себя, Лидера.
         """
-        _SUPERUSER_ID = 8490615925
-        if target_id == _SUPERUSER_ID:
+        if self._owner_id is not None and target_id == self._owner_id:
             return {"ok": False, "error": "Невозможно удалить суперпользователя."}
         if target_id == actor_id:
             return {"ok": False, "error": "Нельзя удалить самого себя."}

@@ -118,7 +118,7 @@ def build_dispatcher(
     dp = Dispatcher()
 
     # ── Внедрение зависимостей ────────────────────────────────────────────
-    user_service  = UserService(db)
+    user_service  = UserService(db, owner_id=owner_id)
     news_service  = NewsService(db)
     audit_service = AuditService(db)
     stats_service = StatsService(db)
