@@ -23,10 +23,6 @@ ADMIN_PANEL_KB = InlineKeyboardMarkup(
             InlineKeyboardButton(text="📅 События",             callback_data=AdminBtn.EVENTS),
         ],
         [
-            InlineKeyboardButton(text="📚 Гайды",               callback_data=AdminBtn.GUIDES),
-            InlineKeyboardButton(text="📸 Скриншоты",           callback_data=AdminBtn.SCREENSHOTS),
-        ],
-        [
             InlineKeyboardButton(text="👥 Участники",           callback_data=AdminBtn.MEMBERS),
         ],
         [
