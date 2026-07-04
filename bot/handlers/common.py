@@ -75,7 +75,9 @@ async def handle_start(
 
     await state.clear()
 
-    deep_join = (command.args or "").strip().lower() == "join"
+    args = (command.args or "").strip().lower()
+    deep_join   = args == "join"
+    deep_update = args == "update"
     user, is_new = await user_service.register_if_new(message.from_user)
 
     # ── Новый пользователь → приветствие, затем мастер первичной настройки ──
@@ -87,6 +89,29 @@ async def handle_start(
         await message.answer(_WELCOME_INTRO)
         await state.set_state(NickSetup.waiting_name)
         await message.answer(_SETUP_WELCOME)
+        return
+
+    # ── Deep-link «update» — обновление профиля ──────────────────────────────
+    if deep_update:
+        logger.info(
+            "Участник %s перешёл по deep-link update — профиль обновлён",
+            user.telegram_id,
+        )
+        if not user.game_nick:
+            await message.answer(
+                "⚜️ <b>AstrumManager обновлён!</b>\n\n"
+                "Данные профиля синхронизированы.\n\n"
+                "🎮 Для завершения настройки укажите <b>игровое имя</b>:"
+            )
+            await state.set_state(NickSetup.waiting_name)
+            await message.answer(_SETUP_RETURN)
+            return
+        await message.answer(
+            "✅ <b>Добро пожаловать!</b>\n\n"
+            "AstrumManager успешно обновлён до последней версии.\n\n"
+            "Все новые функции уже доступны.",
+            reply_markup=MAIN_KEYBOARD,
+        )
         return
 
     # ── Переход по deep-link «join» → мастер первичной настройки ─────────────
