@@ -27,15 +27,13 @@ GIT SYNC: ожидает push
 
 ## Последнее задание
 
-Задание №12 — «Очки активности за сообщения + Telethon + Season-отчёт» (v1.3.2):
-- ✅ cancel.py — NickChange-специфичный обработчик отмены (возврат в профиль).
-- ✅ nick.py — CANCEL_KB в промптах NickChange; _CHANGE_PREVIEW_KB с кнопкой
-  «❌ Отмена»; cb_nick_cancel_change (state=NickChange.waiting_confirm).
-- ✅ members.py — _is_test_user() фильтр; _view_list_users() принимает bot/group_chat_id
-  и фильтрует (Test)/(T) + отсутствующих в группе; del_list не тронут.
-- Проверено: py_compile 3 файлов OK; workflow RUNNING; HTTP 200 в логах.
+Задание №13 — «Финальный аудит Telethon и системы активности» (v1.3.2):
+- ✅ main.py: порядок роутеров исправлен — group_nick ПЕРЕД group (catch-all не перехватывает +Nick/!ник)
+- ✅ statistics.py: cb_hall_of_fame → Telethon-first фильтрация month_w/week_w через _is_active
+- ✅ statistics.py: _fmt_top10_card → формула дополнена «💬 Текст = 1  🖼 Медиа = 2»
+- ✅ py_compile 7 файлов OK; порядок роутеров подтверждён assert; workflow RUNNING
 
-Предыдущий завершённый этап: Задание №1 «Обновление интерфейса основных разделов».
+Предыдущий завершённый этап: Задание №12 «Очки активности + Telethon + Season-отчёт».
 См. `.agents/memory/change_log.md` для полной истории.
 
 ## База данных

@@ -5,6 +5,29 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.3.2p1] — 2026-07-04 — Задание №13: Финальный аудит Telethon и системы активности
+
+### Найдено и устранено (3 файла)
+- `main.py`: порядок включения групповых роутеров — group_nick.router был ПОСЛЕ group.router;
+  catch-all handler перехватывал +Nick/!ник до group_nick. Исправлено: group_nick ПЕРВЫМ.
+- `bot/handlers/statistics.py`: cb_hall_of_fame не фильтровал month_w/week_w по текущему
+  членству в группе (непоследовательно с cb_best_month/cb_most_active_week).
+  Добавлены bot/group_chat_id/telethon_sync/db параметры; _is_active() вызывается для обоих.
+- `bot/handlers/statistics.py`: _fmt_top10_card() — формула не отражала msg_text=+1,
+  msg_media=+2. Добавлена строка «💬 Текст = 1  🖼 Медиа = 2».
+
+### Подтверждено без изменений
+- members.py cb_mem_clean_absent — Bot API для per-user проверки перед удалением ✅ (норма)
+- synctitles.py — Bot API для per-user проверки перед сменой титула ✅ (норма)
+- statistics.py _is_active/_filter_active — Telethon-first ✅
+- stats.py cb_top1/cb_top10 — Telethon-first ✅
+- members.py _view_list_users — Telethon-first ✅
+- db.py season_reset — только DELETE FROM audit_log; users/roles/nicks сохранены ✅
+- group.py handle_group_message_activity — единственный handler, нет дублирования ✅
+- Middleware — LoggingMiddleware (консоль), NickGateMiddleware (только private) ✅
+
+---
+
 ## [1.3.2] — 2026-07-04 — Задание №12: Очки активности за сообщения + Telethon + Season-отчёт
 
 ### Добавлено / изменено (5 файлов)

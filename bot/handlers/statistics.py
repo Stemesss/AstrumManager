@@ -354,7 +354,8 @@ def _fmt_top10_card(users: list) -> str:
     formula = (
         "📌 <i>Очки считаются по журналу:\n"
         "📰 Новость = 5  📅 Событие = 8\n"
-        "📚 Гайд = 10  📸 Скриншот = 2</i>"
+        "📚 Гайд = 10  📸 Скриншот = 2\n"
+        "💬 Текст = 1  🖼 Медиа = 2</i>"
     )
     return f"🏆 <b>Топ-10 участников</b>\n\n{lines}\n\n{_DIVIDER}\n\n{formula}"
 
@@ -448,6 +449,10 @@ async def cb_hall_of_fame(
     callback: CallbackQuery,
     user_service: UserService,
     stats_service: StatsService,
+    bot: Bot,
+    group_chat_id: int,
+    telethon_sync=None,
+    db=None,
 ) -> None:
     if not await _check_admin(callback, user_service):
         return
@@ -460,5 +465,9 @@ async def cb_hall_of_fame(
         stats_service.screenshots(),
         stats_service.events(),
     )
+    if month_w and not await _is_active(month_w.user_id, group_chat_id, bot, telethon_sync, db):
+        month_w = None
+    if week_w and not await _is_active(week_w.user_id, group_chat_id, bot, telethon_sync, db):
+        week_w = None
     text = _fmt_hall_of_fame_card(month_w, week_w, news_s, guides_s, shots_s, events_s)
     await callback.message.edit_text(text, reply_markup=STATISTICS_SECTION_KB)
