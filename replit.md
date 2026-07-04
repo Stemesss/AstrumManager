@@ -32,12 +32,13 @@ A Python Telegram bot for clan management, built with aiogram 3, running in webh
 - `bot/database/db.py` — Database class (aiosqlite, WAL mode)
 - `bot/middlewares/logging.py` — logs every incoming update
 - `bot/middlewares/nick_gate.py` — blocks unregistered users
-- `artifacts/api-server/src/routes/telegram.ts` — proxies `/api/telegram/webhook` → Python bot on port 6000
+- `artifacts/api-server/src/routes/telegram.ts` — proxies `/tg/webhook` → Python bot on port 6000
 
 ## Architecture decisions
 
 - **Webhook over polling:** Replit blocks outbound connections to Telegram's servers, so polling is impossible. The bot registers a webhook URL on startup and receives updates via HTTP POST.
-- **Two-process design:** The Python bot (aiohttp, port 6000) runs alongside a Node.js Express server (port 8080). Express proxies `/api/telegram/webhook` to the Python bot so Telegram can reach it through the shared Replit proxy.
+- **Webhook path avoids `/api` prefix:** Replit's dev-domain edge proxy reserves the `/api` prefix for its own internal use — any request to `/api/*` returns a silent 502 before reaching the app, even though the app itself works fine locally. The webhook path was moved from `/api/telegram/webhook` to `/tg/webhook` to avoid this collision.
+- **Two-process design:** The Python bot (aiohttp, port 6000) runs alongside a Node.js Express server (port 8080). Express proxies `/tg/webhook` to the Python bot so Telegram can reach it through the shared Replit proxy.
 - **Auto-detection in main.py:** `resolve_public_host()` checks `WEBHOOK_BASE_URL` → `REPLIT_DOMAINS` → `RAILWAY_PUBLIC_DOMAIN` in order. Falls back to polling if none is set (useful for local dev).
 - **Port on Railway:** `main.py` respects `$PORT` (Railway's injected port) first, then `$WEBHOOK_PORT`, then defaults to 6000.
 - **Scores on-the-fly:** Activity points computed from `audit_log`, not stored separately. Formula: news_create=5, guide_create=10, screenshot_upload=2, event_create=8.
@@ -59,7 +60,7 @@ A Python Telegram bot for clan management, built with aiogram 3, running in webh
 
 - On Replit, polling is blocked at the network level. Always use webhook mode.
 - The Node.js API server must be running alongside the Python bot on Replit — it is the public face that receives Telegram's HTTPS POST and forwards it to the Python process.
-- Express's `json()` middleware is skipped for `/api/telegram` paths to avoid consuming the request body before the proxy can forward it.
+- Express's `json()` middleware is skipped for `/tg` paths to avoid consuming the request body before the proxy can forward it.
 
 ## User preferences
 

@@ -6,7 +6,7 @@ const router = Router();
 const PYTHON_BOT_PORT = process.env["PYTHON_BOT_PORT"] ?? "6000";
 
 router.use(
-  "/telegram",
+  "/tg",
   createProxyMiddleware({
     target: `http://localhost:${PYTHON_BOT_PORT}`,
     changeOrigin: false,

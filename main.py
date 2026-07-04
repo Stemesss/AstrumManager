@@ -23,7 +23,7 @@ from bot.services.telethon_sync import TelethonSyncService
 from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 
-WEBHOOK_PATH = "/api/telegram/webhook"
+WEBHOOK_PATH = "/tg/webhook"
 
 
 def setup_logging() -> None:

@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import telegramRouter from "./routes/telegram";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -28,7 +29,7 @@ app.use(
 app.use(cors());
 
 app.use((req, _res, next) => {
-  if (req.path.startsWith("/api/telegram")) {
+  if (req.path.startsWith("/tg")) {
     return next();
   }
   express.json()(req, _res, () => {
@@ -36,6 +37,7 @@ app.use((req, _res, next) => {
   });
 });
 
+app.use(telegramRouter);
 app.use("/api", router);
 
 export default app;

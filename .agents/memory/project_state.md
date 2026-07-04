@@ -9,7 +9,7 @@ description: Текущий статус проекта, версия, этап 
 
 ```
 STATUS:   STABLE
-VERSION:  1.3.4
+VERSION:  1.3.5
 DATE:     2026-07-04
 PLATFORM: Replit (аккаунт @Stemessss)
 HEAD:     (после push — см. git ls-remote)
@@ -27,7 +27,19 @@ GIT SYNC: ожидает push
 
 ## Последнее задание
 
-Задание №17 — «Динамический deep-link + очистка ReplyKeyboard» (v1.3.4):
+Задание №18 — «Диагностика /start — bot не отвечал» (v1.3.5):
+- ✅ Код обработчика `/start` (CommandStart, роутеры, middleware, порядок подключения) —
+  проверен полностью, дефектов не найдено
+- ✅ Найдена реальная причина: Replit резервирует префикс `/api` на dev-домене для внутренних
+  нужд edge-прокси — любой запрос на `<repl>.replit.dev/api/*` получает 502 ДО приложения
+- ✅ Вебхук перенесён с `/api/telegram/webhook` на `/tg/webhook` (main.py, telegram.ts, app.ts,
+  routes/index.ts)
+- ✅ Реальное тестирование через Telethon-аккаунт администратора: `/start` и `/start update`
+  теперь получают корректный ответ бота (до исправления — не получали ответа вообще)
+- ✅ py_compile OK; `pnpm run build` — OK; Telegram Bot и API Server — RUNNING; вебхук
+  зарегистрирован (`getWebhookInfo`: pending_update_count=0, ошибок нет)
+
+Предыдущее завершённое задание: Задание №17 — «Динамический deep-link + очистка ReplyKeyboard» (v1.3.4):
 - ✅ Ссылка на бота в inline-кнопке теперь строится динамически через `bot.get_me()`, а не
   захардкожена — реальный username оказался `AstrumManager_bot` (в задании №18 ошибочно был
   зашит `AstrumManagerBot`)
