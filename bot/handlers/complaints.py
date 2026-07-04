@@ -15,7 +15,7 @@ Callback-схема:
 """
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -130,6 +130,7 @@ async def fsm_complaint_content(
     db: Database,
     audit_service: AuditService,
     user_service: UserService,
+    bot: Bot,
 ) -> None:
     if not message.text or message.text.startswith("/"):
         await message.answer("⚠️ Введите текст обращения.")
@@ -166,6 +167,24 @@ async def fsm_complaint_content(
         "Администрация рассмотрит ваше обращение и даст ответ.",
         reply_markup=MAIN_KEYBOARD,
     )
+
+    # ── Уведомление всех Лидеров, Детей клана и Старейшин ────────────────────
+    notification = (
+        f"💡 <b>Новое обращение #{complaint_id}</b>\n\n"
+        f"👤 Автор: {user_name}\n"
+        f"📝 Тема: <b>{title}</b>\n\n"
+        f"{content[:300]}{'...' if len(content) > 300 else ''}"
+    )
+    all_users = await user_service.get_all_users()
+    for u in all_users:
+        if u.telegram_id == user_id:
+            continue
+        if u.role not in (UserRole.LEADER, UserRole.CLAN_CHILD, UserRole.ELDER):
+            continue
+        try:
+            await bot.send_message(u.telegram_id, notification)
+        except Exception as exc:
+            logger.debug("Не удалось уведомить %s об обращении #%d: %s", u.telegram_id, complaint_id, exc)
 
 
 # ── Список обращений ──────────────────────────────────────────────────────────

@@ -20,20 +20,10 @@ class StatisticsBtn:
 
 STATISTICS_MENU_KB = InlineKeyboardMarkup(
     inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🏆 Лучший месяца",  callback_data=StatisticsBtn.BEST_MONTH),
-            InlineKeyboardButton(text="🔥 Активный недели", callback_data=StatisticsBtn.MOST_ACTIVE_WEEK),
-        ],
-        [
-            InlineKeyboardButton(text="📊 Топ-10",        callback_data=StatisticsBtn.TOP10),
-            InlineKeyboardButton(text="👑 Зал славы",     callback_data=StatisticsBtn.HALL_OF_FAME),
-        ],
-        [
-            InlineKeyboardButton(text="📰 Новости",   callback_data=StatisticsBtn.NEWS),
-            InlineKeyboardButton(text="📅 События",   callback_data=StatisticsBtn.EVENTS),
-        ],
-        [InlineKeyboardButton(text="📈 Рост клана",   callback_data=StatisticsBtn.GROWTH)],
-        [InlineKeyboardButton(text="⬅️ Назад",        callback_data=StatisticsBtn.BACK)],
+        [InlineKeyboardButton(text="🔥 Самый активный участник", callback_data=StatisticsBtn.MOST_ACTIVE_WEEK)],
+        [InlineKeyboardButton(text="🏆 Топ-10 участников",       callback_data=StatisticsBtn.TOP10)],
+        [InlineKeyboardButton(text="📊 Рост клана",              callback_data=StatisticsBtn.GROWTH)],
+        [InlineKeyboardButton(text="❌ Закрыть",                  callback_data=StatisticsBtn.BACK)],
     ]
 )
 
