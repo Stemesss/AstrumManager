@@ -9,7 +9,7 @@ description: Текущий статус проекта, версия, этап 
 
 ```
 STATUS:   STABLE
-VERSION:  1.2.9
+VERSION:  1.3.2
 DATE:     2026-07-04
 PLATFORM: Replit (аккаунт @Stemessss)
 HEAD:     (после push — см. git ls-remote)
@@ -27,7 +27,7 @@ GIT SYNC: ожидает push
 
 ## Последнее задание
 
-Задание №5 — «Telethon MTProto как основной источник синхронизации участников»:
+Задание №12 — «Очки активности за сообщения + Telethon + Season-отчёт» (v1.3.2):
 - ✅ cancel.py — NickChange-специфичный обработчик отмены (возврат в профиль).
 - ✅ nick.py — CANCEL_KB в промптах NickChange; _CHANGE_PREVIEW_KB с кнопкой
   «❌ Отмена»; cb_nick_cancel_change (state=NickChange.waiting_confirm).

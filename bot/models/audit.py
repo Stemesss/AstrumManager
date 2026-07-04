@@ -51,6 +51,10 @@ class AuditAction:
     COMPLAINT_REPLY  = "complaint_reply"
     COMPLAINT_DELETE = "complaint_delete"
 
+    # ── Активность в группе ───────────────────────────────────────────────
+    MSG_TEXT  = "msg_text"   # +1 очко: текстовое сообщение
+    MSG_MEDIA = "msg_media"  # +2 очка: фото / видео / голос / документ / GIF
+
     # ── Системные операции ────────────────────────────────────────────────
     MEMBER_DELETE  = "member_delete"
     SEASON_RESET   = "season_reset"

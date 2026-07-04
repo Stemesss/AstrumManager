@@ -554,6 +554,8 @@ class Database:
                 WHEN 'guide_create'      THEN 10
                 WHEN 'screenshot_upload' THEN 2
                 WHEN 'event_create'      THEN 8
+                WHEN 'msg_text'          THEN 1
+                WHEN 'msg_media'         THEN 2
                 ELSE 0 END)                           AS score,
             SUM(CASE WHEN al.action_type = 'news_create'       THEN 1 ELSE 0 END) AS news_count,
             SUM(CASE WHEN al.action_type = 'guide_create'      THEN 1 ELSE 0 END) AS guides_count,
@@ -561,7 +563,10 @@ class Database:
             SUM(CASE WHEN al.action_type = 'event_create'      THEN 1 ELSE 0 END) AS events_count
         FROM audit_log al
         LEFT JOIN users u ON u.telegram_id = al.user_id
-        WHERE al.action_type IN ('news_create','guide_create','screenshot_upload','event_create')
+        WHERE al.action_type IN (
+            'news_create','guide_create','screenshot_upload','event_create',
+            'msg_text','msg_media'
+        )
         GROUP BY al.user_id
         ORDER BY score DESC
         LIMIT ?
@@ -639,6 +644,8 @@ class Database:
                 WHEN 'guide_create'      THEN 10
                 WHEN 'screenshot_upload' THEN 2
                 WHEN 'event_create'      THEN 8
+                WHEN 'msg_text'          THEN 1
+                WHEN 'msg_media'         THEN 2
                 ELSE 0 END)                                                         AS score,
             SUM(CASE WHEN action_type = 'news_create'       THEN 1 ELSE 0 END)     AS news_count,
             SUM(CASE WHEN action_type = 'guide_create'      THEN 1 ELSE 0 END)     AS guides_count,
@@ -696,6 +703,8 @@ class Database:
                 WHEN 'guide_create'      THEN 10
                 WHEN 'screenshot_upload' THEN 2
                 WHEN 'event_create'      THEN 8
+                WHEN 'msg_text'          THEN 1
+                WHEN 'msg_media'         THEN 2
                 ELSE 0 END)                           AS score,
             SUM(CASE WHEN al.action_type = 'news_create'       THEN 1 ELSE 0 END) AS news_count,
             SUM(CASE WHEN al.action_type = 'guide_create'      THEN 1 ELSE 0 END) AS guides_count,
@@ -703,7 +712,10 @@ class Database:
             SUM(CASE WHEN al.action_type = 'event_create'      THEN 1 ELSE 0 END) AS events_count
         FROM audit_log al
         LEFT JOIN users u ON u.telegram_id = al.user_id
-        WHERE al.action_type IN ('news_create','guide_create','screenshot_upload','event_create')
+        WHERE al.action_type IN (
+            'news_create','guide_create','screenshot_upload','event_create',
+            'msg_text','msg_media'
+        )
           AND al.created_at >= {since_expr}
         GROUP BY al.user_id
         ORDER BY score DESC

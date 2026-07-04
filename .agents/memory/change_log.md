@@ -5,6 +5,20 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.3.2] — 2026-07-04 — Задание №12: Очки активности за сообщения + Telethon + Season-отчёт
+
+### Добавлено / изменено (5 файлов)
+- `bot/models/audit.py` — новые константы `MSG_TEXT = "msg_text"` (+1 очко), `MSG_MEDIA = "msg_media"` (+2 очка)
+- `bot/database/db.py` — 3 SQL-формулы очков дополнены WHEN для msg_text/msg_media; WHERE IN расширен
+- `bot/handlers/group.py` — catch-all handler `handle_group_message_activity`: текст +1, медиа +2; игнорирует ботов, стикеры, сервисные сообщения; только для `group_chat_id`
+- `bot/handlers/stats.py` — cb_top1/cb_top10 принимают telethon_sync/db, Telethon-first через sync_and_get_ids; Bot API как fallback
+- `bot/handlers/members.py` — season-отчёт в новом формате: 🏆 Новый сезон + 👥 Участников + 📊 Очки обнулены + 📝 Журнал очищен + ✅ Ники сохранены + 🔒 Роли сохранены
+
+### Формула очков (актуальная)
+- news_create=5, guide_create=10, screenshot_upload=2, event_create=8, msg_text=1, msg_media=2
+
+---
+
 ## [1.3.0] — 2026-07-04 — Задание №9-10: Унификация раздела «Участники» + оформление карточки
 
 ### Изменено (только bot/handlers/members.py)

@@ -202,13 +202,25 @@ async def cb_top1(
     stats_service: StatsService,
     bot: Bot,
     group_chat_id: int,
+    telethon_sync=None,
+    db=None,
 ) -> None:
     if not await _check_access(callback, user_service):
         return
     await callback.answer()
     top = await stats_service.most_active_user()
-    if top and not await is_present_in_group(bot, group_chat_id, top.user_id):
-        top = None
+    if top:
+        present = False
+        if telethon_sync is not None and db is not None:
+            ids = await telethon_sync.sync_and_get_ids(group_chat_id, db)
+            if ids is not None:
+                present = top.user_id in ids
+            else:
+                present = await is_present_in_group(bot, group_chat_id, top.user_id)
+        else:
+            present = await is_present_in_group(bot, group_chat_id, top.user_id)
+        if not present:
+            top = None
     text = (
         _fmt_top1(top)
         if top
@@ -224,12 +236,22 @@ async def cb_top10(
     stats_service: StatsService,
     bot: Bot,
     group_chat_id: int,
+    telethon_sync=None,
+    db=None,
 ) -> None:
     if not await _check_access(callback, user_service):
         return
     await callback.answer()
     users = await stats_service.top_active_users(10)
-    users = await filter_present_in_group(bot, group_chat_id, users, lambda u: u.user_id)
+    if telethon_sync is not None and db is not None:
+        active_ids = await telethon_sync.sync_and_get_ids(group_chat_id, db)
+        if active_ids is not None:
+            from bot.utils.group_filter import filter_by_active_ids
+            users = filter_by_active_ids(users, lambda u: u.user_id, active_ids)
+        else:
+            users = await filter_present_in_group(bot, group_chat_id, users, lambda u: u.user_id)
+    else:
+        users = await filter_present_in_group(bot, group_chat_id, users, lambda u: u.user_id)
     text = (
         _fmt_top10(users)
         if users

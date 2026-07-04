@@ -6,14 +6,18 @@
 Группа получает лишь ограниченный набор команд сообщества:
   - /start → направить пользователя в личный чат;
   - приветствие новых участников;
-  - публикация новостей / событий в чат (через PublishWizard).
+  - публикация новостей / событий в чат (через PublishWizard);
+  - начисление очков активности за сообщения (текст +1, медиа +2).
 """
 import logging
 
 from aiogram import Bot, F, Router
+from aiogram.enums import ContentType
 from aiogram.filters import CommandStart
 from aiogram.types import ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from bot.models.audit import AuditAction
+from bot.services.audit_service import AuditService
 from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 
@@ -136,3 +140,83 @@ async def handle_new_member(
             "Приветствие для %s (%s) опубликовано в группе %s",
             user.full_name, user.id, event.chat.id,
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Начисление очков активности за сообщения в группе
+# ─────────────────────────────────────────────────────────────────────────────
+
+_MEDIA_TYPES = frozenset({
+    ContentType.PHOTO,
+    ContentType.VIDEO,
+    ContentType.VOICE,
+    ContentType.VIDEO_NOTE,
+    ContentType.DOCUMENT,
+    ContentType.ANIMATION,
+})
+
+_IGNORED_TYPES = frozenset({
+    ContentType.STICKER,
+    ContentType.NEW_CHAT_MEMBERS,
+    ContentType.LEFT_CHAT_MEMBER,
+    ContentType.NEW_CHAT_TITLE,
+    ContentType.NEW_CHAT_PHOTO,
+    ContentType.DELETE_CHAT_PHOTO,
+    ContentType.GROUP_CHAT_CREATED,
+    ContentType.PINNED_MESSAGE,
+    ContentType.FORUM_TOPIC_CREATED,
+    ContentType.FORUM_TOPIC_CLOSED,
+    ContentType.FORUM_TOPIC_REOPENED,
+    ContentType.FORUM_TOPIC_EDITED,
+})
+
+
+@router.message()
+async def handle_group_message_activity(
+    message: Message,
+    user_service: UserService,
+    audit_service: AuditService,
+    group_chat_id: int,
+) -> None:
+    """Начисляет очки активности за сообщения участников в клановой группе.
+
+    💬 Текст      → +1 очко  (msg_text)
+    🖼 Медиа       → +2 очка  (msg_media)
+    🚫 Игнорирует: стикеры, реакции, системные сообщения, ботов.
+    """
+    if message.chat.id != group_chat_id:
+        return
+
+    if not message.from_user or message.from_user.is_bot:
+        return
+
+    ct = message.content_type
+    if ct in _IGNORED_TYPES:
+        return
+
+    if ct in _MEDIA_TYPES:
+        action_type = AuditAction.MSG_MEDIA
+        desc = "медиа-сообщение в группе (+2)"
+    elif ct == ContentType.TEXT:
+        action_type = AuditAction.MSG_TEXT
+        desc = "текстовое сообщение в группе (+1)"
+    else:
+        return
+
+    user_id = message.from_user.id
+
+    try:
+        from bot.models.user import UserRole
+        game_nick = await user_service.get_game_nick(user_id)
+        if not game_nick:
+            return
+        role = await user_service.get_role(user_id)
+        await audit_service.log(
+            user_id=user_id,
+            game_nick=game_nick,
+            role=role,
+            action_type=action_type,
+            description=desc,
+        )
+    except Exception:
+        logger.debug("Не удалось начислить очки активности для %s", user_id)
