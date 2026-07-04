@@ -19,6 +19,7 @@ from bot.middlewares.nick_gate import NickGateMiddleware
 from bot.services.audit_service import AuditService
 from bot.services.news_service import NewsService
 from bot.services.stats_service import StatsService
+from bot.services.telethon_sync import TelethonSyncService
 from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 
@@ -123,11 +124,13 @@ def build_dispatcher(
     audit_service = AuditService(db)
     stats_service = StatsService(db)
     topic_service = TopicService(db, chat_id=group_chat_id or -1004463841801)
+    telethon_sync = TelethonSyncService()
     dp["user_service"]  = user_service
     dp["news_service"]  = news_service
     dp["audit_service"] = audit_service
     dp["stats_service"] = stats_service
     dp["topic_service"]  = topic_service
+    dp["telethon_sync"]  = telethon_sync
     dp["group_chat_id"]  = group_chat_id or -1004463841801
     dp["db"]             = db
     dp["owner_id"]       = owner_id

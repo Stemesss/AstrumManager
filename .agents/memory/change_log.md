@@ -5,6 +5,32 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.2.9] — 2026-07-04 — Задание №5: Telethon MTProto как основной источник синхронизации участников
+
+### Добавлено (без изменений схемы БД, callback_data и архитектуры)
+- `bot/services/telethon_sync.py` — `TelethonSyncService`: ленивая загрузка учётных данных
+  из env (TELEGRAM_API_ID / TELEGRAM_API_HASH / TELETHON_SESSION), `fetch_members(group_chat_id)`
+  через `iter_participants`, `sync_and_get_ids(group_chat_id, db)` с кэшем 30 сек.,
+  upsert-only (ники и роли не трогает), `invalidate_cache()`. При любой ошибке → None (fallback).
+- `bot/utils/group_filter.py` — добавлена `filter_by_active_ids(items, get_id, active_ids)`:
+  фильтрация без API-вызовов по готовому set[int].
+- `bot/handlers/members.py` — `_view_list_users()` принимает `telethon_sync` и `db`;
+  сначала пробует Telethon (один MTProto-запрос), при недоступности — Bot API fallback;
+  `handle_members_view` и `cb_memv_list` получают `telethon_sync`/`db` из DI.
+- `bot/handlers/statistics.py` — добавлены хелперы `_is_active()` и `_filter_active()`;
+  `cb_best_month`, `cb_most_active_week`, `cb_top10` принимают `telethon_sync`/`db`,
+  используют Telethon-first, Bot API fallback.
+- `main.py` — импорт `TelethonSyncService`; создаётся один экземпляр в `build_dispatcher()`,
+  инъецируется как `dp["telethon_sync"]`.
+
+### Проверено
+- `python3 -m py_compile` — 5 изменённых файлов, без ошибок.
+- Workflow «Telegram Bot» — RUNNING, вебхук зарегистрирован, HTTP 200 в логах.
+- TelethonSync: ленивая инициализация — при отсутствии секретов логирует предупреждение,
+  не падает; при наличии TELETHON_SESSION работает с первого запроса к списку участников.
+
+---
+
 ## [1.2.8] — 2026-07-03 — Задание №4: кнопка отмены при смене ника + фильтрация участников
 
 ### Изменено (только поведение FSM и отображение списка; callback_data/логика/права/БД не тронуты)

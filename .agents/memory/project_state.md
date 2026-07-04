@@ -9,9 +9,9 @@ description: Текущий статус проекта, версия, этап 
 
 ```
 STATUS:   STABLE
-VERSION:  1.2.8
-DATE:     2026-07-03
-PLATFORM: Replit (новый аккаунт, перенос 2026-07-02)
+VERSION:  1.2.9
+DATE:     2026-07-04
+PLATFORM: Replit (аккаунт @Stemessss)
 HEAD:     (после push — см. git ls-remote)
 GIT SYNC: ожидает push
 ```
@@ -21,12 +21,13 @@ GIT SYNC: ожидает push
 | Процесс | Статус | Порт |
 |---------|--------|------|
 | Telegram Bot (Python / aiogram 3) | RUNNING | 6000 |
-| API Server (Node.js / Express) | RUNNING | 8080 |
-| Component Preview Server (Vite) | FAILED (не нужен для бота) | — |
+| API Server (Node.js / Express) | RUNNING (PID-стабильный) | 8081 |
+| artifacts/api-server — дубликат | FAILED (port conflict — норма) | — |
+| Component Preview Server (Vite) | RUNNING | 8084 |
 
 ## Последнее задание
 
-Задание №4 — «Кнопка отмены при смене ника + фильтрация участников»:
+Задание №5 — «Telethon MTProto как основной источник синхронизации участников»:
 - ✅ cancel.py — NickChange-специфичный обработчик отмены (возврат в профиль).
 - ✅ nick.py — CANCEL_KB в промптах NickChange; _CHANGE_PREVIEW_KB с кнопкой
   «❌ Отмена»; cb_nick_cancel_change (state=NickChange.waiting_confirm).

@@ -217,6 +217,8 @@ async def _view_list_users(
     user_service: UserService,
     bot: Bot | None = None,
     group_chat_id: int | None = None,
+    telethon_sync=None,
+    db=None,
 ) -> list[User]:
     """Список участников для обычного просмотра.
 
@@ -224,8 +226,10 @@ async def _view_list_users(
     ещё не зарегистрирован (не задал игровой ник), с пометкой «🆕 Не
     зарегистрирован». Фильтрует:
     • пользователей с суффиксом (Test) или (T) в нике;
-    • пользователей, отсутствующих в Telegram-группе (если доступен bot).
+    • пользователей, отсутствующих в Telegram-группе.
 
+    Сначала пробует Telethon (один запрос, быстро).
+    Если Telethon недоступен — Bot API (по запросу на участника, медленно).
     При ошибке API пользователь включается в список (fail-open).
     """
     users = [
@@ -233,27 +237,36 @@ async def _view_list_users(
         if not _is_test_user(u)
     ]
 
-    # Фильтрация по членству в Telegram-группе
-    if bot and group_chat_id:
-        filtered: list[User] = []
-        for u in users:
-            try:
-                member = await bot.get_chat_member(group_chat_id, u.telegram_id)
-                if member.status not in ("left", "kicked"):
-                    filtered.append(u)
-            except TelegramBadRequest as e:
-                err = str(e).lower()
-                if any(k in err for k in ("user not found", "participant", "user_not_participant")):
-                    pass  # подтверждено отсутствие — не показываем
-                else:
-                    filtered.append(u)  # неизвестная ошибка — включаем
-            except TelegramRetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
-                filtered.append(u)  # после ожидания включаем без повторной проверки
-            except Exception:
-                filtered.append(u)  # ошибка API — включаем (fail-open)
-            await asyncio.sleep(0.05)
-        users = filtered
+    if group_chat_id:
+        # Приоритет: Telethon — один MTProto-запрос вместо N Bot API вызовов
+        active_ids: set[int] | None = None
+        if telethon_sync is not None and db is not None:
+            active_ids = await telethon_sync.sync_and_get_ids(group_chat_id, db)
+
+        if active_ids is not None:
+            from bot.utils.group_filter import filter_by_active_ids
+            users = filter_by_active_ids(users, lambda u: u.telegram_id, active_ids)
+        elif bot:
+            # Fallback: Bot API — по одному запросу на пользователя
+            filtered: list[User] = []
+            for u in users:
+                try:
+                    member = await bot.get_chat_member(group_chat_id, u.telegram_id)
+                    if member.status not in ("left", "kicked"):
+                        filtered.append(u)
+                except TelegramBadRequest as e:
+                    err = str(e).lower()
+                    if any(k in err for k in ("user not found", "participant", "user_not_participant")):
+                        pass  # подтверждено отсутствие — не показываем
+                    else:
+                        filtered.append(u)  # неизвестная ошибка — включаем
+                except TelegramRetryAfter as e:
+                    await asyncio.sleep(e.retry_after + 1)
+                    filtered.append(u)  # после ожидания включаем без повторной проверки
+                except Exception:
+                    filtered.append(u)  # ошибка API — включаем (fail-open)
+                await asyncio.sleep(0.05)
+            users = filtered
 
     return _sort_users(users)
 
@@ -268,12 +281,15 @@ async def handle_members_view(
     user_service: UserService,
     bot: Bot,
     group_chat_id: int,
+    telethon_sync=None,
+    db=None,
 ) -> None:
     """Красивый просмотр списка участников — без административных функций.
 
     Фильтрует тестовых пользователей (Test)/(T) и отсутствующих в группе.
+    Использует Telethon как основной источник; Bot API — как fallback.
     """
-    all_users = await _view_list_users(user_service, bot, group_chat_id)
+    all_users = await _view_list_users(user_service, bot, group_chat_id, telethon_sync, db)
     total = len(all_users)
     if total == 0:
         await message.answer("👥 <b>Участники</b>\n\nСписок пока пуст.")
@@ -294,9 +310,11 @@ async def cb_memv_list(
     user_service: UserService,
     bot: Bot,
     group_chat_id: int,
+    telethon_sync=None,
+    db=None,
 ) -> None:
     page = int(callback.data.split(":")[2])
-    all_users = await _view_list_users(user_service, bot, group_chat_id)
+    all_users = await _view_list_users(user_service, bot, group_chat_id, telethon_sync, db)
     total = len(all_users)
     page_users = all_users[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
     text = (

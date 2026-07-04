@@ -22,7 +22,7 @@ from bot.models.stats import ContentStats, NewsStats, UserActivity
 from bot.models.user import UserRole
 from bot.services.stats_service import StatsService
 from bot.services.user_service import UserService
-from bot.utils.group_filter import filter_present_in_group, is_present_in_group
+from bot.utils.group_filter import filter_by_active_ids, filter_present_in_group, is_present_in_group
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -53,6 +53,37 @@ _SECTION_NAMES: dict[str, str] = {
 # ─────────────────────────────────────────────────────────────────────────────
 # Вспомогательные
 # ─────────────────────────────────────────────────────────────────────────────
+
+async def _is_active(
+    user_id: int,
+    group_chat_id: int,
+    bot: "Bot",
+    telethon_sync=None,
+    db=None,
+) -> bool:
+    """Проверяет членство: сначала Telethon, при недоступности — Bot API."""
+    if telethon_sync is not None and db is not None:
+        ids = await telethon_sync.sync_and_get_ids(group_chat_id, db)
+        if ids is not None:
+            return user_id in ids
+    return await is_present_in_group(bot, group_chat_id, user_id)
+
+
+async def _filter_active(
+    items: list,
+    get_id,
+    group_chat_id: int,
+    bot: "Bot",
+    telethon_sync=None,
+    db=None,
+) -> list:
+    """Фильтрует список: сначала Telethon, при недоступности — Bot API."""
+    if telethon_sync is not None and db is not None:
+        ids = await telethon_sync.sync_and_get_ids(group_chat_id, db)
+        if ids is not None:
+            return filter_by_active_ids(items, get_id, ids)
+    return await filter_present_in_group(bot, group_chat_id, items, get_id)
+
 
 async def _check_admin(callback: CallbackQuery, user_service: UserService) -> bool:
     """Проверяет административные права; отвечает alert и возвращает False при отказе."""
@@ -199,13 +230,15 @@ async def cb_best_month(
     stats_service: StatsService,
     bot: Bot,
     group_chat_id: int,
+    telethon_sync=None,
+    db=None,
 ) -> None:
     """Показывает карточку лучшего участника текущего месяца."""
     if not await _check_admin(callback, user_service):
         return
     await callback.answer()
     winner = await stats_service.best_of_month()
-    if winner and not await is_present_in_group(bot, group_chat_id, winner.user_id):
+    if winner and not await _is_active(winner.user_id, group_chat_id, bot, telethon_sync, db):
         winner = None
     text = (
         _fmt_winner_card("🏆", "Лучший участник месяца", winner)
@@ -222,13 +255,15 @@ async def cb_most_active_week(
     stats_service: StatsService,
     bot: Bot,
     group_chat_id: int,
+    telethon_sync=None,
+    db=None,
 ) -> None:
     """Показывает карточку самого активного участника за последние 7 дней."""
     if not await _check_admin(callback, user_service):
         return
     await callback.answer()
     winner = await stats_service.best_of_week()
-    if winner and not await is_present_in_group(bot, group_chat_id, winner.user_id):
+    if winner and not await _is_active(winner.user_id, group_chat_id, bot, telethon_sync, db):
         winner = None
     text = (
         _fmt_winner_card("🔥", "Самый активный участник недели", winner)
@@ -331,12 +366,14 @@ async def cb_top10(
     stats_service: StatsService,
     bot: Bot,
     group_chat_id: int,
+    telethon_sync=None,
+    db=None,
 ) -> None:
     if not await _check_admin(callback, user_service):
         return
     await callback.answer()
     users = await stats_service.top_active_users(limit=10)
-    users = await filter_present_in_group(bot, group_chat_id, users, lambda u: u.user_id)
+    users = await _filter_active(users, lambda u: u.user_id, group_chat_id, bot, telethon_sync, db)
     await callback.message.edit_text(_fmt_top10_card(users), reply_markup=STATISTICS_SECTION_KB)
 
 

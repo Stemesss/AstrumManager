@@ -56,3 +56,12 @@ async def is_present_in_group(bot: Bot, group_chat_id: int, telegram_id: int) ->
         return True
     except Exception:
         return True
+
+
+def filter_by_active_ids(
+    items: list[T],
+    get_user_id: Callable[[T], int],
+    active_ids: set[int],
+) -> list[T]:
+    """Фильтрует список по готовому набору активных telegram_id (без обращений к API)."""
+    return [item for item in items if get_user_id(item) in active_ids]
