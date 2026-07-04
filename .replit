@@ -56,7 +56,7 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
-packages = ["cacert", "libxcrypt"]
+packages = ["cacert", "cargo", "libiconv", "libxcrypt", "openssl", "rustc"]
 
 [userenv]
 
