@@ -29,13 +29,6 @@ logger = logging.getLogger(__name__)
 _WIP     = "🚧 Раздел находится в разработке."
 _VERSION = "v1.0.0"
 
-_ROLE_ICONS = {
-    UserRole.LEADER:     "👑",
-    UserRole.CLAN_CHILD: "⭐",
-    UserRole.ELDER:      "🛡️",
-    UserRole.MEMBER:     "👤",
-}
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Вспомогательные функции
@@ -74,10 +67,9 @@ async def _build_panel(
 
     members_block = ""
     for r in ROLE_ORDER:
-        icon  = _ROLE_ICONS[r]
         label = role_label(r)
         cnt   = counts.get(r, 0)
-        members_block += f"{icon} {label}: {cnt}\n"
+        members_block += f"{label}: {cnt}\n"
 
     return (
         "🛡️ <b>Панель управления</b>\n\n"
@@ -85,9 +77,7 @@ async def _build_panel(
         f"👥 Всего участников: {total}\n"
         f"{members_block}\n"
         f"📰 Новостей: {news_count}\n"
-        f"📅 Событий: 0\n"
-        f"📚 Гайдов: 0\n"
-        f"📸 Скриншотов: 0\n\n"
+        f"📅 Событий: 0\n\n"
         "Выберите раздел:"
     )
 

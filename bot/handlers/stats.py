@@ -8,7 +8,7 @@
 """
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.main_menu import BTN
@@ -17,6 +17,7 @@ from bot.models.stats import ClanGrowth, ContentStats, NewsStats, UserActivity
 from bot.models.user import UserRole
 from bot.services.stats_service import StatsService
 from bot.services.user_service import UserService
+from bot.utils.group_filter import filter_present_in_group, is_present_in_group
 from bot.utils.roles import role_label
 
 router = Router()
@@ -67,8 +68,6 @@ def _fmt_top1(u: UserActivity) -> str:
         f"🎮 <b>{u.game_nick}</b>\n"
         f"🎖 {role_label(role_enum)}\n\n"
         f"📰 Новостей: {u.news_count}  →  {u.news_count * 5} очков\n"
-        f"📚 Гайдов: {u.guides_count}  →  {u.guides_count * 10} очков\n"
-        f"📸 Скриншотов: {u.screenshots_count}  →  {u.screenshots_count * 2} очка\n"
         f"📅 Событий: {u.events_count}  →  {u.events_count * 8} очков\n\n"
         f"📈 <b>Общая активность: {u.score} очков</b>"
     )
@@ -201,11 +200,15 @@ async def cb_top1(
     callback: CallbackQuery,
     user_service: UserService,
     stats_service: StatsService,
+    bot: Bot,
+    group_chat_id: int,
 ) -> None:
     if not await _check_access(callback, user_service):
         return
     await callback.answer()
     top = await stats_service.most_active_user()
+    if top and not await is_present_in_group(bot, group_chat_id, top.user_id):
+        top = None
     text = (
         _fmt_top1(top)
         if top
@@ -219,11 +222,14 @@ async def cb_top10(
     callback: CallbackQuery,
     user_service: UserService,
     stats_service: StatsService,
+    bot: Bot,
+    group_chat_id: int,
 ) -> None:
     if not await _check_access(callback, user_service):
         return
     await callback.answer()
     users = await stats_service.top_active_users(10)
+    users = await filter_present_in_group(bot, group_chat_id, users, lambda u: u.user_id)
     text = (
         _fmt_top10(users)
         if users

@@ -30,10 +30,6 @@ STATISTICS_MENU_KB = InlineKeyboardMarkup(
         ],
         [
             InlineKeyboardButton(text="📰 Новости",   callback_data=StatisticsBtn.NEWS),
-            InlineKeyboardButton(text="📚 Гайды",     callback_data=StatisticsBtn.GUIDES),
-        ],
-        [
-            InlineKeyboardButton(text="📸 Скриншоты", callback_data=StatisticsBtn.SCREENSHOTS),
             InlineKeyboardButton(text="📅 События",   callback_data=StatisticsBtn.EVENTS),
         ],
         [InlineKeyboardButton(text="📈 Рост клана",   callback_data=StatisticsBtn.GROWTH)],

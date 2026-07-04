@@ -18,10 +18,6 @@ def audit_menu_kb(role: UserRole) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📅 События",    callback_data="alog:cat:events:0"),
         ],
         [
-            InlineKeyboardButton(text="📚 Гайды",      callback_data="alog:cat:guides:0"),
-            InlineKeyboardButton(text="📸 Скриншоты",  callback_data="alog:cat:screenshots:0"),
-        ],
-        [
             InlineKeyboardButton(text="🔍 Поиск",      callback_data="alog:search"),
             InlineKeyboardButton(text="📖 Все записи", callback_data="alog:cat:all:0"),
         ],

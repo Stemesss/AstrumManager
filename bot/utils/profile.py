@@ -30,8 +30,6 @@ def build_profile_card(name: str, role: UserRole, stats: dict) -> str:
         "⚜️ <b>AstrumManager</b>  •  👤 Профиль\n\n"
         f"🎮 <b>Ник:</b> {full_nick}\n"
         f"🎖 <b>Роль:</b> {role_display(role)}\n\n"
-        f"📅 <b>В клане:</b> {pluralize_days(stats['days_in_clan'])}\n"
-        f"📚 <b>Гайдов:</b> {stats['guides_count']}\n"
-        f"📸 <b>Скриншотов:</b> {stats['screenshots_count']}\n\n"
+        f"📅 <b>В клане:</b> {pluralize_days(stats['days_in_clan'])}\n\n"
         "🟢 Онлайн"
     )

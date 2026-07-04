@@ -9,7 +9,7 @@
 import asyncio
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery
 
 from bot.keyboards.admin_panel import AdminBtn
@@ -22,6 +22,7 @@ from bot.models.stats import ContentStats, NewsStats, UserActivity
 from bot.models.user import UserRole
 from bot.services.stats_service import StatsService
 from bot.services.user_service import UserService
+from bot.utils.group_filter import filter_present_in_group, is_present_in_group
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -70,8 +71,6 @@ def _fmt_winner_card(icon: str, title: str, u: UserActivity) -> str:
         f"⭐ {u.score} очков\n\n"
         f"{_DIVIDER}\n\n"
         f"📰 Новостей: {u.news_count}\n"
-        f"📚 Гайдов: {u.guides_count}\n"
-        f"📸 Скриншотов: {u.screenshots_count}\n"
         f"📅 Событий: {u.events_count}"
     )
 
@@ -198,12 +197,16 @@ async def cb_best_month(
     callback: CallbackQuery,
     user_service: UserService,
     stats_service: StatsService,
+    bot: Bot,
+    group_chat_id: int,
 ) -> None:
     """Показывает карточку лучшего участника текущего месяца."""
     if not await _check_admin(callback, user_service):
         return
     await callback.answer()
     winner = await stats_service.best_of_month()
+    if winner and not await is_present_in_group(bot, group_chat_id, winner.user_id):
+        winner = None
     text = (
         _fmt_winner_card("🏆", "Лучший участник месяца", winner)
         if winner
@@ -217,12 +220,16 @@ async def cb_most_active_week(
     callback: CallbackQuery,
     user_service: UserService,
     stats_service: StatsService,
+    bot: Bot,
+    group_chat_id: int,
 ) -> None:
     """Показывает карточку самого активного участника за последние 7 дней."""
     if not await _check_admin(callback, user_service):
         return
     await callback.answer()
     winner = await stats_service.best_of_week()
+    if winner and not await is_present_in_group(bot, group_chat_id, winner.user_id):
+        winner = None
     text = (
         _fmt_winner_card("🔥", "Самый активный участник недели", winner)
         if winner
@@ -322,11 +329,14 @@ async def cb_top10(
     callback: CallbackQuery,
     user_service: UserService,
     stats_service: StatsService,
+    bot: Bot,
+    group_chat_id: int,
 ) -> None:
     if not await _check_admin(callback, user_service):
         return
     await callback.answer()
     users = await stats_service.top_active_users(limit=10)
+    users = await filter_present_in_group(bot, group_chat_id, users, lambda u: u.user_id)
     await callback.message.edit_text(_fmt_top10_card(users), reply_markup=STATISTICS_SECTION_KB)
 
 

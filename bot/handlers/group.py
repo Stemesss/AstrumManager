@@ -15,6 +15,7 @@ from aiogram.filters import CommandStart
 from aiogram.types import ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot.services.topic_service import TopicService
+from bot.services.user_service import UserService
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -62,6 +63,7 @@ async def handle_new_member(
     event: ChatMemberUpdated,
     bot: Bot,
     topic_service: TopicService,
+    user_service: UserService,
     bot_username: str,
 ) -> None:
     """
@@ -93,6 +95,14 @@ async def handle_new_member(
     if user.is_bot:
         return
 
+    # Заводим минимальную запись в БД сразу при вступлении в группу, чтобы
+    # раздел «Участники» мог показать пользователя как «🆕 Не зарегистрирован»
+    # ещё до того, как он запустит бота и задаст игровой ник.
+    try:
+        await user_service.get_or_create(user)
+    except Exception:
+        logger.exception("Не удалось создать запись участника %s при вступлении в группу", user.id)
+
     mention = f'<a href="tg://user?id={user.id}">{user.full_name}</a>'
     text = (
         f"👋 <b>Добро пожаловать в Astrum!</b> {mention}\n\n"
@@ -111,7 +121,6 @@ async def handle_new_member(
         "📚 <b>Разделы сообщества</b>\n\n"
         "📰 Новости — важные объявления клана\n"
         "📅 События — мероприятия и активности\n"
-        "📚 Гайды — полезные материалы\n"
         "👥 Участники — список членов клана\n"
         "📊 Статистика — активность и рейтинг"
     )

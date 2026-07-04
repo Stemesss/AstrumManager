@@ -36,7 +36,6 @@ _DIVIDER = "━━━━━━━━━━━━━━━━"
 
 _MENU_TEXT = (
     "📋 <b>Журнал действий</b>\n\n"
-    f"{_DIVIDER}\n\n"
     "Выберите категорию для просмотра:"
 )
 
@@ -245,7 +244,6 @@ async def cb_audit_clear_execute(
     await callback.message.edit_text(
         "📋 <b>Журнал действий</b>\n\n"
         f"✅ Журнал очищен. Удалено записей: <b>{deleted}</b>.\n\n"
-        f"{_DIVIDER}\n\n"
         "Выберите категорию для просмотра:",
         reply_markup=audit_menu_kb(role),
     )

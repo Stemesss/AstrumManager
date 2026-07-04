@@ -22,10 +22,6 @@ STATS_MENU_KB = InlineKeyboardMarkup(
         [InlineKeyboardButton(text="🏆 Топ-10 участников",       callback_data=StatBtn.TOP10)],
         [
             InlineKeyboardButton(text="📰 Новости",    callback_data=StatBtn.NEWS),
-            InlineKeyboardButton(text="📚 Гайды",      callback_data=StatBtn.GUIDES),
-        ],
-        [
-            InlineKeyboardButton(text="📸 Скриншоты",  callback_data=StatBtn.SCREENSHOTS),
             InlineKeyboardButton(text="📅 События",    callback_data=StatBtn.EVENTS),
         ],
         [InlineKeyboardButton(text="📊 Рост клана",   callback_data=StatBtn.GROWTH)],

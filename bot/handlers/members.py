@@ -97,7 +97,11 @@ def _sort_users(users: list[User]) -> list[User]:
     order = {r: i for i, r in enumerate(ROLE_ORDER)}
     return sorted(
         users,
-        key=lambda u: (order.get(u.role, 99), (u.game_nick or u.first_name).lower()),
+        key=lambda u: (
+            1 if not u.game_nick else 0,
+            order.get(u.role, 99),
+            (u.game_nick or u.first_name).lower(),
+        ),
     )
 
 
@@ -112,6 +116,19 @@ def _effective_role(actor_id: int, actor_role: UserRole) -> UserRole:
 async def _card_text(u: User, user_service: UserService, stats_service: StatsService) -> str:
     """Единая карточка участника — используется и в администрировании, и в просмотре."""
     username_line = f"@{u.username}" if u.username else u.first_name
+
+    if not u.game_nick:
+        return (
+            "🆕 <b>Не зарегистрирован</b>\n"
+            f"👤 <b>{u.first_name}</b>\n\n"
+            f"{_DIVIDER}\n\n"
+            "Участник состоит в группе, но ещё не запустил бота "
+            "и не задал игровой ник.\n\n"
+            f"{_DIVIDER}\n\n"
+            f"📱 {username_line}\n"
+            f"🆔 <code>{u.telegram_id}</code>"
+        )
+
     days = await user_service.get_days_in_clan(u.telegram_id)
     score = (await stats_service.user_activity(u.telegram_id))["score"]
     title = build_admin_title(u.role, u.game_nick) if u.game_nick else ""
@@ -203,8 +220,9 @@ async def _view_list_users(
 ) -> list[User]:
     """Список участников для обычного просмотра.
 
-    Фильтрует:
-    • пользователей без игрового ника;
+    Показывает всех актуальных участников Telegram-группы — включая тех, кто
+    ещё не зарегистрирован (не задал игровой ник), с пометкой «🆕 Не
+    зарегистрирован». Фильтрует:
     • пользователей с суффиксом (Test) или (T) в нике;
     • пользователей, отсутствующих в Telegram-группе (если доступен bot).
 
@@ -212,7 +230,7 @@ async def _view_list_users(
     """
     users = [
         u for u in await user_service.get_all_users()
-        if u.game_nick and not _is_test_user(u)
+        if not _is_test_user(u)
     ]
 
     # Фильтрация по членству в Telegram-группе
@@ -631,8 +649,6 @@ async def cb_mem_stats(
 
     score   = stats["score"]
     n_news  = stats["news"]
-    n_guide = stats["guides"]
-    n_shot  = stats["screenshots"]
     n_event = stats["events"]
 
     lines = [
@@ -647,9 +663,7 @@ async def cb_mem_stats(
         "",
         "📦 <b>Публикации</b>",
         f"📰 Новостей: <b>{n_news}</b>",
-        f"📚 Гайдов: <b>{n_guide}</b>",
         f"📅 Событий: <b>{n_event}</b>",
-        f"📸 Скриншотов: <b>{n_shot}</b>",
     ]
 
     await callback.answer()

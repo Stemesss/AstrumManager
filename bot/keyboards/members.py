@@ -12,7 +12,10 @@ _ICONS: dict[UserRole, str] = ROLE_DISPLAY_ICONS
 
 def _member_label(u: User) -> str:
     """Компактная подпись участника для списков: значок+роль, ник, @username/имя."""
-    nick = (u.game_nick or u.first_name)[:20]
+    if not u.game_nick:
+        ident = (f"@{u.username}" if u.username else u.first_name)[:20]
+        return f"🆕 Не зарегистрирован • {ident}"
+    nick = u.game_nick[:20]
     raw_ident = u.username or u.first_name
     if raw_ident.lower() == nick.lower():
         return f"{role_label(u.role)} • {nick}"
