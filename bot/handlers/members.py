@@ -170,15 +170,22 @@ async def _show_menu(cb: CallbackQuery) -> None:
         await cb.message.answer(_MENU_TEXT, reply_markup=members_menu_kb())
 
 
-async def _show_list(cb: CallbackQuery, user_service: UserService, page: int) -> None:
-    # Показываем только участников с установленным игровым ником
-    all_users = _sort_users([u for u in await user_service.get_all_users() if u.game_nick])
+async def _show_list(
+    cb: CallbackQuery,
+    user_service: UserService,
+    page: int,
+    telethon_sync=None,
+    db=None,
+    group_chat_id: int | None = None,
+    bot: Bot | None = None,
+) -> None:
+    # Используем тот же источник данных, что и раздел «Главное меню → Участники»
+    all_users = await _view_list_users(user_service, bot, group_chat_id, telethon_sync, db)
     total = len(all_users)
     page_users = all_users[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
     text = (
         f"👥 <b>Участники клана</b>\n\n"
-        f"{_DIVIDER}\n\n"
-        f"👤 Всего: {total}\n\n"
+        f"👤 Всего участников: {total}\n\n"
         "Выберите участника:"
     )
     kb = members_list_kb(page_users, page, total)
@@ -297,8 +304,7 @@ async def handle_members_view(
     page_users = all_users[:PAGE_SIZE]
     text = (
         f"👥 <b>Участники клана</b>\n\n"
-        f"{_DIVIDER}\n\n"
-        f"👤 Всего: {total}\n\n"
+        f"👤 Всего участников: {total}\n\n"
         "Выберите участника:"
     )
     await message.answer(text, reply_markup=view_list_kb(page_users, 0, total))
@@ -319,8 +325,7 @@ async def cb_memv_list(
     page_users = all_users[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
     text = (
         f"👥 <b>Участники клана</b>\n\n"
-        f"{_DIVIDER}\n\n"
-        f"👤 Всего: {total}\n\n"
+        f"👤 Всего участников: {total}\n\n"
         "Выберите участника:"
     )
     kb = view_list_kb(page_users, page, total)
@@ -397,12 +402,19 @@ async def cb_mem_menu(callback: CallbackQuery, user_service: UserService) -> Non
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("mem:list:"))
-async def cb_mem_list(callback: CallbackQuery, user_service: UserService) -> None:
+async def cb_mem_list(
+    callback: CallbackQuery,
+    user_service: UserService,
+    bot: Bot,
+    group_chat_id: int,
+    telethon_sync=None,
+    db=None,
+) -> None:
     if not await _check_admin(callback, user_service):
         return
     page = int(callback.data.split(":")[2])
     await callback.answer()
-    await _show_list(callback, user_service, page)
+    await _show_list(callback, user_service, page, telethon_sync, db, group_chat_id, bot)
 
 
 @router.callback_query(F.data == MemberBtn.NOOP)
