@@ -9,11 +9,11 @@ description: Текущий статус проекта, версия, этап 
 
 ```
 STATUS:   STABLE
-VERSION:  1.3.5
+VERSION:  1.3.6
 DATE:     2026-07-04
 PLATFORM: Replit (аккаунт @Stemessss)
-HEAD:     (после push — см. git ls-remote)
-GIT SYNC: ожидает push
+HEAD:     63ab1cb (запушен в origin/main)
+GIT SYNC: синхронизирован
 ```
 
 ## Воркфлоу
@@ -26,6 +26,18 @@ GIT SYNC: ожидает push
 | Component Preview Server (Vite) | RUNNING | 8084 |
 
 ## Последнее задание
+
+Задание №19 — «Финальная проверка и повторная отправка объявления» (v1.3.6):
+- ✅ Полная контрольная проверка после Задания №18: Telegram Bot RUNNING, webhook на
+  `/tg/webhook` (pending_update_count=0), py_compile OK, Telethon подключается,
+  `/start` и `/start update` отвечают корректно, главное меню открывается, ошибок в логах нет
+- ✅ Изменений кода не потребовалось — все проверки прошли на инфраструктуре, исправленной в 1.3.5
+- ✅ Объявление повторно сформировано и отправлено только администратору (id 8490615925) через
+  `send_update_announcement()` — username через `bot.get_me()`, без хардкода
+- ✅ Инлайн-кнопка «🚀 Обновить AstrumManager» открывает @AstrumManager_bot, deep-link
+  `?start=update` передаётся и обрабатывается корректно, reply-клавиатура отсутствует, зависших
+  FSM-состояний не обнаружено
+- ✅ Checkpoint (63ab1cb) создан автоматически, push выполнен, origin/main синхронизирован
 
 Задание №18 — «Диагностика /start — bot не отвечал» (v1.3.5):
 - ✅ Код обработчика `/start` (CommandStart, роутеры, middleware, порядок подключения) —
