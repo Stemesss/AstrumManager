@@ -3,7 +3,7 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.main_menu import BTN, MAIN_KEYBOARD
 from bot.services.user_service import UserService
@@ -28,6 +28,27 @@ async def handle_profile(message: Message, user_service: UserService) -> None:
 
     name = user.game_nick or ""
     await message.answer(
+        build_profile_card(name, role, stats),
+        reply_markup=PROFILE_KB,
+    )
+
+
+@router.callback_query(F.data == BTN.PROFILE)
+async def cb_profile(callback: CallbackQuery, user_service: UserService) -> None:
+    """Inline-точка входа в профиль (карточка обновления /start update).
+
+    Переиспользует существующую логику построения карточки — без дублирования.
+    """
+    if not callback.from_user:
+        return
+    await callback.answer()
+
+    user = await user_service.get_or_create(callback.from_user)
+    role = await user_service.get_role(callback.from_user.id)
+    stats = await user_service.get_profile_stats(callback.from_user.id)
+
+    name = user.game_nick or ""
+    await callback.message.answer(
         build_profile_card(name, role, stats),
         reply_markup=PROFILE_KB,
     )

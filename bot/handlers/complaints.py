@@ -81,16 +81,30 @@ async def _is_manager(user_id: int, user_service: UserService) -> bool:
 
 # ── Главный экран раздела ─────────────────────────────────────────────────────
 
+_INTRO_TEXT = (
+    "💡 <b>Жалобы и предложения</b>\n\n"
+    "Здесь вы можете создать обращение к администрации клана.\n"
+    "Администрация рассмотрит его и даст ответ."
+)
+
+
 @router.message(F.text == BTN.COMPLAINTS, StateFilter(None))
 async def handle_complaints(message: Message, user_service: UserService) -> None:
     manager = await _is_manager(message.from_user.id, user_service)
-    text = (
-        "💡 <b>Жалобы и предложения</b>\n\n"
-        "Здесь вы можете создать обращение к администрации клана.\n"
-        "Администрация рассмотрит его и даст ответ."
-    )
     kb = complaints_manager_kb() if manager else complaints_main_kb()
-    await message.answer(text, reply_markup=kb)
+    await message.answer(_INTRO_TEXT, reply_markup=kb)
+
+
+@router.callback_query(F.data == BTN.COMPLAINTS, StateFilter(None))
+async def cb_complaints_open(callback: CallbackQuery, user_service: UserService) -> None:
+    """Inline-точка входа в раздел жалоб (карточка обновления /start update).
+
+    Переиспользует существующую логику построения экрана — без дублирования.
+    """
+    await callback.answer()
+    manager = await _is_manager(callback.from_user.id, user_service)
+    kb = complaints_manager_kb() if manager else complaints_main_kb()
+    await callback.message.answer(_INTRO_TEXT, reply_markup=kb)
 
 
 # ── Создание обращения (FSM) ──────────────────────────────────────────────────
