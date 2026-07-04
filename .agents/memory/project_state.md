@@ -9,7 +9,7 @@ description: Текущий статус проекта, версия, этап 
 
 ```
 STATUS:   STABLE
-VERSION:  1.3.3
+VERSION:  1.3.4
 DATE:     2026-07-04
 PLATFORM: Replit (аккаунт @Stemessss)
 HEAD:     (после push — см. git ls-remote)
@@ -27,7 +27,17 @@ GIT SYNC: ожидает push
 
 ## Последнее задание
 
-Задание №18 — «send_update_announcement — тестовая рассылка админу» (v1.3.3):
+Задание №17 — «Динамический deep-link + очистка ReplyKeyboard» (v1.3.4):
+- ✅ Ссылка на бота в inline-кнопке теперь строится динамически через `bot.get_me()`, а не
+  захардкожена — реальный username оказался `AstrumManager_bot` (в задании №18 ошибочно был
+  зашит `AstrumManagerBot`)
+- ✅ `send_update_announcement` при передаче `state` завершает FSM и снимает зависшую
+  ReplyKeyboard («❌ Отмена» и т.п.) без видимого следа перед отправкой анонса
+- ✅ Тестовый анонс повторно отправлен и доставлен в личный чат администратора
+- ✅ py_compile OK; Telegram Bot и API Server — RUNNING; вебхук зарегистрирован
+- ⛔ В клановую группу ничего не отправлялось
+
+Предыдущее завершённое задание: Задание №18 — «send_update_announcement — тестовая рассылка админу» (v1.3.3):
 - ✅ Проверено окружение: секреты на месте, TELETHON_SESSION подключается (id 8490615925, @Stemessss)
 - ✅ Установлены отсутствовавшие зависимости (Python: aiogram/aiohttp/aiosqlite/pydantic/telethon;
   Node: pnpm install) — среда была свежей, workflow падали из-за отсутствия node_modules/.venv

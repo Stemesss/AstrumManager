@@ -8,6 +8,7 @@ import logging
 
 from aiogram import Bot, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.services.announcements import send_update_announcement
@@ -20,7 +21,12 @@ _SUPERUSER_ID = 8490615925
 
 
 @router.message(Command("testannounce"))
-async def cmd_testannounce(message: Message, bot: Bot, owner_id: int | None) -> None:
+async def cmd_testannounce(
+    message: Message,
+    bot: Bot,
+    state: FSMContext,
+    owner_id: int | None,
+) -> None:
     """Отправляет анонс обновления исполнителю команды (тестовый режим)."""
     if not message.from_user:
         return
@@ -32,7 +38,7 @@ async def cmd_testannounce(message: Message, bot: Bot, owner_id: int | None) -> 
         await message.reply("🔒 Команда доступна только администратору.")
         return
 
-    ok = await send_update_announcement(bot, actor_id)
+    ok = await send_update_announcement(bot, actor_id, state=state)
     if ok:
         await message.reply("✅ Тестовый анонс отправлен вам в личные сообщения.")
     else:

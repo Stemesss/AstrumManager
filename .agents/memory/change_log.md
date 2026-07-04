@@ -5,6 +5,28 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.3.4] — 2026-07-04 — Задание №17: динамический deep-link + очистка ReplyKeyboard
+
+### Изменено (3 файла)
+- `bot/keyboards/announcement.py`: статичный `UPDATE_ANNOUNCEMENT_KB`/`UPDATE_BOT_URL` заменены
+  на `build_update_announcement_kb(bot_username)` — ссылка строится из реального username бота
+- `bot/services/announcements.py`: `send_update_announcement(bot, chat_id, state=None)` теперь
+  получает username через `await bot.get_me()` (username менять в коде больше не нужно);
+  если передан `state` — вызывает `state.clear()`; перед отправкой анонса снимает любую
+  зависшую ReplyKeyboard через служебное сообщение с `ReplyKeyboardRemove()`, которое сразу
+  удаляется — у пользователя остаётся только анонс с inline-кнопкой
+- `bot/handlers/announce_test.py`: `/testannounce` теперь передаёт `state: FSMContext` в
+  `send_update_announcement`
+
+### Проверка
+- Реальный username бота подтверждён через `bot.get_me()`: `AstrumManager_bot` (ранее в коде
+  ошибочно был захардкожен `AstrumManagerBot`) — теперь ссылка формируется динамически и
+  не зависит от смены username в будущем
+- Тестовый анонс повторно отправлен и доставлен в личный чат администратора (id 8490615925)
+- py_compile OK; Telegram Bot и API Server — RUNNING; вебхук зарегистрирован
+
+---
+
 ## [1.3.3] — 2026-07-04 — Задание №18: send_update_announcement (тестовая рассылка админу)
 
 ### Добавлено (3 новых файла, 1 изменён)
