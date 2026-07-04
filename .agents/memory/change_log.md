@@ -5,6 +5,32 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.3.3] — 2026-07-04 — Задание №18: send_update_announcement (тестовая рассылка админу)
+
+### Добавлено (3 новых файла, 1 изменён)
+- `bot/keyboards/announcement.py`: `UPDATE_ANNOUNCEMENT_KB` — InlineKeyboardMarkup с одной
+  кнопкой `InlineKeyboardButton(text="🚀 Обновить AstrumManager", url="https://t.me/AstrumManagerBot?start=update")`
+- `bot/services/announcements.py`: `send_update_announcement(bot, chat_id)` — универсальная
+  функция отправки анонса обновления; текст получен от пользователя (не был в проекте
+  заранее, найден только упоминанием в задании — уточнил через вопрос)
+- `bot/handlers/announce_test.py`: ВРЕМЕННЫЙ `/testannounce` — доступен только суперпользователю
+  (id 8490615925) или `owner_id`; отправляет анонс исполнителю команды в личку (тестовый режим,
+  клановая группа не используется)
+- `main.py`: зарегистрирован `announce_test.router` в приватном роутере после `admin.router`
+
+### Проверка окружения перед изменениями
+- Секреты TELEGRAM_BOT_TOKEN / TELEGRAM_API_ID / TELEGRAM_API_HASH / TELETHON_SESSION — на месте
+- Python/Node зависимости отсутствовали в среде (свежий контейнер) — переустановлены
+  (aiogram, aiohttp, aiosqlite, pydantic, telethon; pnpm install для monorepo)
+- TELETHON_SESSION проверен вручную: подключается без исключений, `get_me()` → id 8490615925 (@Stemessss)
+- Тестовое сообщение реально отправлено в личный чат администратора (id 8490615925) — доставлено
+
+### Не затронуто (по требованию задания)
+architecture, database, callback_data (существующие), Telethon-логика синхронизации,
+роли/права, статистика, activity system, forum topics
+
+---
+
 ## [1.3.2p2] — 2026-07-04 — Задание №15: Правила, обращения, Центр статистики
 
 ### Изменено (4 файла)

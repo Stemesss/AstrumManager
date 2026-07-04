@@ -9,7 +9,7 @@ description: Текущий статус проекта, версия, этап 
 
 ```
 STATUS:   STABLE
-VERSION:  1.3.2
+VERSION:  1.3.3
 DATE:     2026-07-04
 PLATFORM: Replit (аккаунт @Stemessss)
 HEAD:     (после push — см. git ls-remote)
@@ -27,7 +27,19 @@ GIT SYNC: ожидает push
 
 ## Последнее задание
 
-Задание №15 — «Правила, обращения, Центр статистики» (v1.3.2):
+Задание №18 — «send_update_announcement — тестовая рассылка админу» (v1.3.3):
+- ✅ Проверено окружение: секреты на месте, TELETHON_SESSION подключается (id 8490615925, @Stemessss)
+- ✅ Установлены отсутствовавшие зависимости (Python: aiogram/aiohttp/aiosqlite/pydantic/telethon;
+  Node: pnpm install) — среда была свежей, workflow падали из-за отсутствия node_modules/.venv
+- ✅ `bot/services/announcements.py`: `send_update_announcement(bot, chat_id)` — одна inline-кнопка
+  (url, без голых ссылок в тексте)
+- ✅ `bot/keyboards/announcement.py`, `bot/handlers/announce_test.py` (временный `/testannounce`,
+  доступ только суперпользователю/owner_id)
+- ✅ Тестовый анонс реально отправлен и доставлен в личный чат администратора (id 8490615925)
+- ✅ py_compile всего проекта OK; Telegram Bot и API Server — RUNNING; вебхук зарегистрирован
+- ⛔ В клановую группу ничего не отправлялось (по требованию задания — только TEST режим)
+
+Предыдущее завершённое задание: Задание №15 — «Правила, обращения, Центр статистики» (v1.3.2):
 - ✅ rules.py: правило 7 → «2 дней», правило 8 → «Детей клана и Старейшин»
 - ✅ complaints.py: рассылка уведомлений Лидеру + Дитя клана + Старейшинам при создании обращения
 - ✅ keyboards/statistics.py: меню сокращено до 4 кнопок (Активный, Топ-10, Рост, Закрыть)
