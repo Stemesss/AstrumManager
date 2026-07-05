@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "oC3yNcu2eAST7H2HjHX2D"
+uri = "file://AstrumManager_FULL.zip"
+type = "unspecified"
+title = "AstrumManager_FULL.zip"
