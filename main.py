@@ -13,10 +13,11 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, announce_test, audit, cancel, common, complaints, content, debug, echo, group, group_nick, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, synctitles, topics
+from bot.handlers import admin, announce_test, audit, broadcast, cancel, common, complaints, content, debug, echo, group, group_nick, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, synctitles, topics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.middlewares.nick_gate import NickGateMiddleware
 from bot.services.audit_service import AuditService
+from bot.services.broadcast_service import BroadcastService
 from bot.services.news_service import NewsService
 from bot.services.stats_service import StatsService
 from bot.services.telethon_sync import TelethonSyncService
@@ -119,18 +120,20 @@ def build_dispatcher(
     dp = Dispatcher()
 
     # ── Внедрение зависимостей ────────────────────────────────────────────
-    user_service  = UserService(db, owner_id=owner_id)
-    news_service  = NewsService(db)
-    audit_service = AuditService(db)
-    stats_service = StatsService(db)
-    topic_service = TopicService(db, chat_id=group_chat_id or -1004463841801)
-    telethon_sync = TelethonSyncService()
-    dp["user_service"]  = user_service
-    dp["news_service"]  = news_service
-    dp["audit_service"] = audit_service
-    dp["stats_service"] = stats_service
-    dp["topic_service"]  = topic_service
-    dp["telethon_sync"]  = telethon_sync
+    user_service      = UserService(db, owner_id=owner_id)
+    news_service      = NewsService(db)
+    audit_service     = AuditService(db)
+    stats_service     = StatsService(db)
+    topic_service     = TopicService(db, chat_id=group_chat_id or -1004463841801)
+    telethon_sync     = TelethonSyncService()
+    broadcast_service = BroadcastService(db)
+    dp["user_service"]      = user_service
+    dp["news_service"]      = news_service
+    dp["audit_service"]     = audit_service
+    dp["stats_service"]     = stats_service
+    dp["topic_service"]      = topic_service
+    dp["telethon_sync"]      = telethon_sync
+    dp["broadcast_service"]  = broadcast_service
     dp["group_chat_id"]  = group_chat_id or -1004463841801
     dp["db"]             = db
     dp["owner_id"]       = owner_id
@@ -173,6 +176,7 @@ def build_dispatcher(
     private.include_router(complaints.router)  # жалобы и предложения
     private.include_router(rules.router)       # правила клана
     private.include_router(admin.router)
+    private.include_router(broadcast.router)   # мастер рассылок — после admin (перехватывает admin:broadcasts)
     private.include_router(announce_test.router)  # ВРЕМЕННО: /testannounce — тестовый анонс обновления
     private.include_router(stats.router)
     private.include_router(statistics.router)

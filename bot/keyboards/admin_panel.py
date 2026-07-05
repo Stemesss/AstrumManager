@@ -14,6 +14,7 @@ class AdminBtn:
     AUDIT       = "admin:audit"
     SETTINGS    = "admin:settings"
     STATISTICS  = "admin:statistics"
+    BROADCASTS  = "admin:broadcasts"
 
 
 ADMIN_PANEL_KB = InlineKeyboardMarkup(
@@ -24,6 +25,7 @@ ADMIN_PANEL_KB = InlineKeyboardMarkup(
         ],
         [
             InlineKeyboardButton(text="👥 Участники",           callback_data=AdminBtn.MEMBERS),
+            InlineKeyboardButton(text="📣 Рассылки",            callback_data=AdminBtn.BROADCASTS),
         ],
         [
             InlineKeyboardButton(text="📋 Журнал действий",     callback_data=AdminBtn.AUDIT),

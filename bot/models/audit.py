@@ -55,6 +55,9 @@ class AuditAction:
     MSG_TEXT  = "msg_text"   # +1 очко: текстовое сообщение
     MSG_MEDIA = "msg_media"  # +2 очка: фото / видео / голос / документ / GIF
 
+    # ── Рассылки ──────────────────────────────────────────────────────────
+    BROADCAST_SEND = "broadcast_send"
+
     # ── Системные операции ────────────────────────────────────────────────
     MEMBER_DELETE  = "member_delete"
     SEASON_RESET   = "season_reset"
@@ -119,6 +122,9 @@ CATEGORY_ACTIONS: dict[str, list[str] | None] = {
         AuditAction.COMPLAINT_REPLY,
         AuditAction.COMPLAINT_DELETE,
     ],
+    "broadcasts": [
+        AuditAction.BROADCAST_SEND,
+    ],
     "all": None,
 }
 
@@ -132,5 +138,6 @@ CATEGORY_LABELS: dict[str, str] = {
     "memes":       "😂 Мемы",
     "rules":       "✅ Правила",
     "complaints":  "💡 Жалобы и предложения",
+    "broadcasts":  "📣 Рассылки",
     "all":         "📖 Все записи",
 }

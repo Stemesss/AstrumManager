@@ -87,6 +87,22 @@ CREATE TABLE IF NOT EXISTS publication_attachments (
 )
 """
 
+_CREATE_BROADCASTS = """
+CREATE TABLE IF NOT EXISTS broadcasts (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    author_id    INTEGER NOT NULL,
+    author_name  TEXT    NOT NULL,
+    text         TEXT    NOT NULL,
+    audience     TEXT    NOT NULL DEFAULT 'all',
+    status       TEXT    NOT NULL DEFAULT 'draft',
+    total        INTEGER NOT NULL DEFAULT 0,
+    sent_count   INTEGER NOT NULL DEFAULT 0,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    sent_at      TEXT
+)
+"""
+
 _CREATE_COMPLAINTS = """
 CREATE TABLE IF NOT EXISTS complaints (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,6 +140,7 @@ class Database:
         await self._conn.execute(_CREATE_TOPICS)
         await self._conn.execute(_CREATE_ATTACHMENTS)
         await self._conn.execute(_CREATE_COMPLAINTS)
+        await self._conn.execute(_CREATE_BROADCASTS)
         # Миграция: добавляем game_nick для существующих БД (игнорируем если уже есть)
         try:
             await self._conn.execute("ALTER TABLE users ADD COLUMN game_nick TEXT")
@@ -537,6 +554,59 @@ class Database:
         await self.conn.execute("DELETE FROM audit_log")
         await self.conn.commit()
         return count
+
+    # ------------------------------------------------------------------ #
+    # Методы работы с рассылками
+    # ------------------------------------------------------------------ #
+
+    async def create_broadcast(
+        self, author_id: int, author_name: str, text: str, audience: str
+    ) -> int:
+        """Создаёт черновик рассылки, возвращает её ID."""
+        async with self.conn.execute(
+            """
+            INSERT INTO broadcasts (author_id, author_name, text, audience)
+            VALUES (?, ?, ?, ?)
+            """,
+            (author_id, author_name, text, audience),
+        ) as cur:
+            broadcast_id = cur.lastrowid
+        await self.conn.commit()
+        return broadcast_id  # type: ignore[return-value]
+
+    async def update_broadcast_result(
+        self,
+        broadcast_id: int,
+        total: int,
+        sent_count: int,
+        failed_count: int,
+        status: str = "sent",
+    ) -> None:
+        """Записывает результат отправки рассылки."""
+        await self.conn.execute(
+            """
+            UPDATE broadcasts
+            SET total = ?, sent_count = ?, failed_count = ?, status = ?,
+                sent_at = datetime('now')
+            WHERE id = ?
+            """,
+            (total, sent_count, failed_count, status, broadcast_id),
+        )
+        await self.conn.commit()
+
+    async def get_broadcast(self, broadcast_id: int) -> aiosqlite.Row | None:
+        """Возвращает рассылку по ID."""
+        async with self.conn.execute(
+            "SELECT * FROM broadcasts WHERE id = ?", (broadcast_id,)
+        ) as cur:
+            return await cur.fetchone()
+
+    async def list_broadcasts(self, limit: int = 20) -> list[aiosqlite.Row]:
+        """Возвращает последние рассылки, от новых к старым."""
+        async with self.conn.execute(
+            "SELECT * FROM broadcasts ORDER BY id DESC LIMIT ?", (limit,)
+        ) as cur:
+            return await cur.fetchall()
 
     # ------------------------------------------------------------------ #
     # Методы статистики
