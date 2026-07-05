@@ -56,7 +56,11 @@ class AuditAction:
     MSG_MEDIA = "msg_media"  # +2 очка: фото / видео / голос / документ / GIF
 
     # ── Рассылки ──────────────────────────────────────────────────────────
-    BROADCAST_SEND = "broadcast_send"
+    BROADCAST_SEND            = "broadcast_send"
+    BROADCAST_TEMPLATE_SAVE   = "broadcast_template_save"
+    BROADCAST_TEMPLATE_DELETE = "broadcast_template_delete"
+    BROADCAST_SCHEDULE        = "broadcast_schedule"
+    BROADCAST_SCHEDULE_CANCEL = "broadcast_schedule_cancel"
 
     # ── Системные операции ────────────────────────────────────────────────
     MEMBER_DELETE  = "member_delete"
@@ -124,6 +128,10 @@ CATEGORY_ACTIONS: dict[str, list[str] | None] = {
     ],
     "broadcasts": [
         AuditAction.BROADCAST_SEND,
+        AuditAction.BROADCAST_TEMPLATE_SAVE,
+        AuditAction.BROADCAST_TEMPLATE_DELETE,
+        AuditAction.BROADCAST_SCHEDULE,
+        AuditAction.BROADCAST_SCHEDULE_CANCEL,
     ],
     "all": None,
 }

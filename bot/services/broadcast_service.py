@@ -29,6 +29,84 @@ class BroadcastService:
         """Возвращает последние рассылки, от новых к старым."""
         return await self._db.list_broadcasts(limit)
 
+    # ── Шаблоны ───────────────────────────────────────────────────────────
+
+    async def save_template(self, author_id: int, author_name: str, name: str, text: str) -> int:
+        """Сохраняет текст рассылки как шаблон, возвращает его ID."""
+        return await self._db.create_broadcast_template(author_id, author_name, name, text)
+
+    async def list_templates(self):
+        """Возвращает все сохранённые шаблоны."""
+        return await self._db.list_broadcast_templates()
+
+    async def get_template(self, template_id: int):
+        """Возвращает шаблон по ID или None."""
+        return await self._db.get_broadcast_template(template_id)
+
+    async def delete_template(self, template_id: int) -> None:
+        """Удаляет шаблон по ID."""
+        await self._db.delete_broadcast_template(template_id)
+
+    # ── Планировщик ───────────────────────────────────────────────────────
+
+    async def schedule(self, broadcast_id: int, scheduled_at: str) -> None:
+        """Помечает рассылку как запланированную на указанное время (UTC)."""
+        await self._db.schedule_broadcast(broadcast_id, scheduled_at)
+
+    async def list_scheduled(self):
+        """Возвращает все ещё не отправленные запланированные рассылки."""
+        return await self._db.list_scheduled_broadcasts()
+
+    async def cancel_scheduled(self, broadcast_id: int) -> bool:
+        """Отменяет запланированную рассылку. True, если запись была найдена."""
+        return await self._db.cancel_scheduled_broadcast(broadcast_id)
+
+    async def get_due(self):
+        """Возвращает запланированные рассылки, время которых уже наступило."""
+        return await self._db.get_due_scheduled_broadcasts()
+
+    async def run_due(self, bot: Bot, user_service, audit_service) -> None:
+        """
+        Отправляет все запланированные рассылки, время которых наступило.
+
+        Вызывается периодически фоновым планировщиком (см. broadcast_scheduler.py).
+        """
+        from bot.models.audit import AuditAction
+        from bot.utils.roles import role_label
+
+        due = await self.get_due()
+        for row in due:
+            broadcast_id = row["id"]
+            text = row["text"]
+            author_id = row["author_id"]
+            author_name = row["author_name"]
+            audience = row["audience"]
+
+            if audience == "self":
+                chat_ids = [author_id]
+            else:
+                users = await user_service.get_all_users()
+                chat_ids = [u.telegram_id for u in users]
+
+            try:
+                result = await self.send(bot, broadcast_id, text, chat_ids)
+            except Exception:
+                logger.exception("Ошибка при отправке запланированной рассылки #%s", broadcast_id)
+                continue
+
+            actor_nick = await user_service.get_game_nick(author_id) or author_name
+            actor_role = await user_service.get_role(author_id)
+            await audit_service.log(
+                user_id=author_id,
+                game_nick=actor_nick,
+                role=actor_role,
+                action_type=AuditAction.BROADCAST_SEND,
+                description=(
+                    f"{role_label(actor_role)} {actor_nick}: запланированная рассылка #{broadcast_id} "
+                    f"отправлена (доставлено {result['sent']} из {result['total']})"
+                ),
+            )
+
     async def send(
         self, bot: Bot, broadcast_id: int, text: str, chat_ids: list[int]
     ) -> dict:

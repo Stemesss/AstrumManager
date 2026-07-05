@@ -103,6 +103,17 @@ CREATE TABLE IF NOT EXISTS broadcasts (
 )
 """
 
+_CREATE_BROADCAST_TEMPLATES = """
+CREATE TABLE IF NOT EXISTS broadcast_templates (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    author_id   INTEGER NOT NULL,
+    author_name TEXT    NOT NULL,
+    name        TEXT    NOT NULL,
+    text        TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
 _CREATE_COMPLAINTS = """
 CREATE TABLE IF NOT EXISTS complaints (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,6 +152,7 @@ class Database:
         await self._conn.execute(_CREATE_ATTACHMENTS)
         await self._conn.execute(_CREATE_COMPLAINTS)
         await self._conn.execute(_CREATE_BROADCASTS)
+        await self._conn.execute(_CREATE_BROADCAST_TEMPLATES)
         # Миграция: добавляем game_nick для существующих БД (игнорируем если уже есть)
         try:
             await self._conn.execute("ALTER TABLE users ADD COLUMN game_nick TEXT")
@@ -168,6 +180,12 @@ class Database:
         try:
             await self._conn.execute("ALTER TABLE audit_log ADD COLUMN target_id INTEGER")
             logger.info("Миграция: столбец target_id добавлен в таблицу audit_log")
+        except Exception:
+            pass  # Столбец уже существует
+        # Миграция: scheduled_at для отложенной отправки рассылок
+        try:
+            await self._conn.execute("ALTER TABLE broadcasts ADD COLUMN scheduled_at TEXT")
+            logger.info("Миграция: столбец scheduled_at добавлен в таблицу broadcasts")
         except Exception:
             pass  # Столбец уже существует
         await self._conn.commit()
@@ -607,6 +625,78 @@ class Database:
             "SELECT * FROM broadcasts ORDER BY id DESC LIMIT ?", (limit,)
         ) as cur:
             return await cur.fetchall()
+
+    async def schedule_broadcast(self, broadcast_id: int, scheduled_at: str) -> None:
+        """Помечает рассылку как запланированную на указанное время (UTC, 'YYYY-MM-DD HH:MM:SS')."""
+        await self.conn.execute(
+            "UPDATE broadcasts SET status = 'scheduled', scheduled_at = ? WHERE id = ?",
+            (scheduled_at, broadcast_id),
+        )
+        await self.conn.commit()
+
+    async def cancel_scheduled_broadcast(self, broadcast_id: int) -> bool:
+        """Отменяет запланированную рассылку. Возвращает True, если запись была найдена и отменена."""
+        async with self.conn.execute(
+            "UPDATE broadcasts SET status = 'cancelled' WHERE id = ? AND status = 'scheduled'",
+            (broadcast_id,),
+        ) as cur:
+            changed = cur.rowcount
+        await self.conn.commit()
+        return bool(changed)
+
+    async def list_scheduled_broadcasts(self) -> list[aiosqlite.Row]:
+        """Возвращает все запланированные (ещё не отправленные) рассылки."""
+        async with self.conn.execute(
+            "SELECT * FROM broadcasts WHERE status = 'scheduled' ORDER BY scheduled_at ASC"
+        ) as cur:
+            return await cur.fetchall()
+
+    async def get_due_scheduled_broadcasts(self) -> list[aiosqlite.Row]:
+        """Возвращает запланированные рассылки, время которых уже наступило (UTC)."""
+        async with self.conn.execute(
+            "SELECT * FROM broadcasts WHERE status = 'scheduled' AND scheduled_at <= datetime('now')"
+        ) as cur:
+            return await cur.fetchall()
+
+    # ------------------------------------------------------------------ #
+    # Методы работы с шаблонами рассылок
+    # ------------------------------------------------------------------ #
+
+    async def create_broadcast_template(
+        self, author_id: int, author_name: str, name: str, text: str
+    ) -> int:
+        """Сохраняет шаблон рассылки, возвращает его ID."""
+        async with self.conn.execute(
+            """
+            INSERT INTO broadcast_templates (author_id, author_name, name, text)
+            VALUES (?, ?, ?, ?)
+            """,
+            (author_id, author_name, name, text),
+        ) as cur:
+            template_id = cur.lastrowid
+        await self.conn.commit()
+        return template_id  # type: ignore[return-value]
+
+    async def list_broadcast_templates(self) -> list[aiosqlite.Row]:
+        """Возвращает все шаблоны рассылок, от новых к старым."""
+        async with self.conn.execute(
+            "SELECT * FROM broadcast_templates ORDER BY id DESC"
+        ) as cur:
+            return await cur.fetchall()
+
+    async def get_broadcast_template(self, template_id: int) -> aiosqlite.Row | None:
+        """Возвращает шаблон по ID."""
+        async with self.conn.execute(
+            "SELECT * FROM broadcast_templates WHERE id = ?", (template_id,)
+        ) as cur:
+            return await cur.fetchone()
+
+    async def delete_broadcast_template(self, template_id: int) -> None:
+        """Удаляет шаблон по ID."""
+        await self.conn.execute(
+            "DELETE FROM broadcast_templates WHERE id = ?", (template_id,)
+        )
+        await self.conn.commit()
 
     # ------------------------------------------------------------------ #
     # Методы статистики

@@ -17,6 +17,7 @@ from bot.handlers import admin, announce_test, audit, broadcast, cancel, common,
 from bot.middlewares.logging import LoggingMiddleware
 from bot.middlewares.nick_gate import NickGateMiddleware
 from bot.services.audit_service import AuditService
+from bot.services.broadcast_scheduler import run_scheduler as run_broadcast_scheduler
 from bot.services.broadcast_service import BroadcastService
 from bot.services.news_service import NewsService
 from bot.services.stats_service import StatsService
@@ -84,9 +85,15 @@ async def on_startup(
     logger.info("Регистрация вебхука → %s  (allowed_updates=%s)", webhook_url, allowed)
     await bot.set_webhook(webhook_url, allowed_updates=allowed, drop_pending_updates=True, secret_token=webhook_secret)
     logger.info("Вебхук успешно зарегистрирован")
+    dp["broadcast_scheduler_task"] = asyncio.create_task(
+        run_broadcast_scheduler(bot, dp["broadcast_service"], dp["user_service"], dp["audit_service"])
+    )
 
 
-async def on_shutdown(bot: Bot, db: Database, **_kwargs) -> None:
+async def on_shutdown(bot: Bot, db: Database, dp: Dispatcher, **_kwargs) -> None:
+    task = dp.get("broadcast_scheduler_task")
+    if task:
+        task.cancel()
     await bot.delete_webhook()
     await db.close()
     logging.getLogger(__name__).info("Вебхук удалён")
@@ -105,9 +112,15 @@ async def on_startup_polling(
     logging.getLogger(__name__).info(
         "Режим polling — @%s (id=%s)", me.username, me.id
     )
+    dp["broadcast_scheduler_task"] = asyncio.create_task(
+        run_broadcast_scheduler(bot, dp["broadcast_service"], dp["user_service"], dp["audit_service"])
+    )
 
 
-async def on_shutdown_polling(db: Database, **_kwargs) -> None:
+async def on_shutdown_polling(db: Database, dp: Dispatcher, **_kwargs) -> None:
+    task = dp.get("broadcast_scheduler_task")
+    if task:
+        task.cancel()
     await db.close()
 
 
@@ -197,7 +210,7 @@ def run_webhook(bot: Bot, dp: Dispatcher, db: Database, public_host: str, webhoo
     dp.startup.register(
         partial(on_startup, bot=bot, db=db, dp=dp, webhook_url=webhook_url, webhook_secret=webhook_secret)
     )
-    dp.shutdown.register(partial(on_shutdown, bot=bot, db=db))
+    dp.shutdown.register(partial(on_shutdown, bot=bot, db=db, dp=dp))
 
     app = web.Application()
     SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=webhook_secret).register(app, path=WEBHOOK_PATH)
@@ -209,7 +222,7 @@ def run_webhook(bot: Bot, dp: Dispatcher, db: Database, public_host: str, webhoo
 
 async def run_polling(bot: Bot, dp: Dispatcher, db: Database) -> None:
     dp.startup.register(partial(on_startup_polling, bot=bot, db=db, dp=dp))
-    dp.shutdown.register(partial(on_shutdown_polling, db=db))
+    dp.shutdown.register(partial(on_shutdown_polling, db=db, dp=dp))
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 

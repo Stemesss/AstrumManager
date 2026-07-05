@@ -5,6 +5,64 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.3.7] — 2026-07-05 — Подсистема «📣 Рассылки»: этапы 6–9 (отмена, история, шаблоны, планировщик)
+
+### Этап 6 — исправление «❌ Отмена»
+- `bot/keyboards/nav.py` — новый хелпер `reset_to_main_menu(message, text)`: отправляет
+  сообщение с `ReplyKeyboardRemove()`, затем отдельным сообщением главное меню — гарантирует,
+  что старая Reply-клавиатура не остаётся видимой при любом выходе из FSM.
+- `bot/handlers/cancel.py` — `handle_global_cancel` и обработка отмены смены ника используют
+  явный `ReplyKeyboardRemove()` перед восстановлением меню; добавлен новый обработчик
+  `handle_cancel_outside_fsm` (StateFilter `default_state`) — нажатие «❌ Отмена» вне активного
+  сценария больше не показывает «Я не понял сообщение», а просто убирает клавиатуру и
+  показывает главное меню.
+- `bot/handlers/broadcast.py` — все точки выхода (отмена, отправка себе, отправка всем, закрытие
+  хаба, ошибки) переведены на `reset_to_main_menu`; операции отправки обёрнуты в try/except с
+  откатом состояния и понятным сообщением об ошибке вместо зависания FSM.
+
+### Этап 7 — история рассылок
+- `BroadcastService.list_recent()` (уже был) используется в новом обработчике `cb_history`:
+  показывает дату, автора, аудиторию, статус, сокращённый текст, счётчики sent/failed по
+  последним 10 рассылкам.
+
+### Этап 8 — шаблоны рассылок
+- Новая таблица `broadcast_templates` (id, author_id, author_name, name, text, created_at).
+- `Database`: `create/list/get/delete_broadcast_template`. `BroadcastService`: тонкие обёртки
+  `save_template/list_templates/get_template/delete_template`.
+- Хаб «📣 Рассылки» → «🗂 Шаблоны»: список с использованием (переход сразу в предпросмотр с
+  текстом шаблона) и удалением; создание нового шаблона отдельным потоком (текст → название);
+  кнопка «💾 Сохранить как шаблон» добавлена прямо в предпросмотр рассылки.
+- Новые действия аудита: `BROADCAST_TEMPLATE_SAVE`, `BROADCAST_TEMPLATE_DELETE`.
+
+### Этап 9 — планировщик отложенной отправки
+- `broadcasts.scheduled_at TEXT` (миграция ALTER TABLE, автоприменяется при старте).
+- `Database`: `schedule_broadcast`, `cancel_scheduled_broadcast`, `list_scheduled_broadcasts`,
+  `get_due_scheduled_broadcasts` (сравнение по `datetime('now')`, время хранится в UTC).
+- Новый `bot/services/broadcast_scheduler.py`: фоновый asyncio-цикл (проверка раз в 30с),
+  запускается в `main.py` (`on_startup`/`on_startup_polling`) как `dp["broadcast_scheduler_task"]`,
+  корректно отменяется в `on_shutdown`/`on_shutdown_polling`.
+- Предпросмотр рассылки → «⏰ Запланировать»: ввод даты/времени одним сообщением
+  (`ДД.ММ.ГГГГ ЧЧ:ММ`, UTC), валидация формата и что время в будущем; всегда аудитория «все
+  участники». Хаб → «⏰ Запланированные»: список с кнопкой отмены на каждую запись.
+- Новые действия аудита: `BROADCAST_SCHEDULE`, `BROADCAST_SCHEDULE_CANCEL`.
+
+### Реструктуризация входа
+- `AdminBtn.BROADCASTS` теперь открывает хаб-меню (✏️ Новая рассылка / 🗂 Шаблоны / 📊 История /
+  ⏰ Запланированные / ❌ Закрыть) вместо прямого перехода в мастер создания.
+
+### Проверка
+- `python3 -m py_compile` — все изменённые/новые файлы (main.py, bot/handlers/broadcast.py,
+  bot/handlers/cancel.py, bot/keyboards/broadcast.py, bot/keyboards/nav.py,
+  bot/states/broadcast.py, bot/services/broadcast_service.py,
+  bot/services/broadcast_scheduler.py, bot/database/db.py, bot/models/audit.py) — без ошибок.
+- Telegram Bot — RUNNING, вебхук зарегистрирован без ошибок; API Server — RUNNING.
+- Программный smoke-test: `main.build_dispatcher()` собирается без исключений с новым
+  планировщиком и сервисом; проверено отсутствие конфликтов `callback_data` между модулями.
+- Ручная проверка через реальные сообщения в Telegram не проводилась в рамках этого блока
+  (только статическая проверка кода/старт бота) — рекомендуется точечно протестировать вручную.
+
+---
+
 ## [1.3.6] — 2026-07-04 — Задание №19: финальная проверка и повторная отправка объявления
 
 Полная контрольная проверка после исправления вебхука (Задание №18): Telegram Bot RUNNING,
