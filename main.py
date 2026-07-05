@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.config import load_config
 from bot.database.db import Database
-from bot.handlers import admin, audit, cancel, common, complaints, content, debug, echo, group, group_nick, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, synctitles, topics
+from bot.handlers import admin, announce_test, audit, cancel, common, complaints, content, debug, echo, group, group_nick, icons, members, menu, news, nick, publish, rules, setrole, stats, statistics, synctitles, topics
 from bot.middlewares.logging import LoggingMiddleware
 from bot.middlewares.nick_gate import NickGateMiddleware
 from bot.services.audit_service import AuditService
@@ -23,7 +23,7 @@ from bot.services.telethon_sync import TelethonSyncService
 from bot.services.topic_service import TopicService
 from bot.services.user_service import UserService
 
-WEBHOOK_PATH = "/api/telegram/webhook"
+WEBHOOK_PATH = "/tg/webhook"
 
 
 def setup_logging() -> None:
@@ -173,6 +173,7 @@ def build_dispatcher(
     private.include_router(complaints.router)  # жалобы и предложения
     private.include_router(rules.router)       # правила клана
     private.include_router(admin.router)
+    private.include_router(announce_test.router)  # ВРЕМЕННО: /testannounce — тестовый анонс обновления
     private.include_router(stats.router)
     private.include_router(statistics.router)
     private.include_router(menu.router)

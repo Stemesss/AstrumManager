@@ -9,11 +9,11 @@ description: Текущий статус проекта, версия, этап 
 
 ```
 STATUS:   STABLE
-VERSION:  1.3.2
-DATE:     2026-07-04
+VERSION:  1.3.3
+DATE:     2026-07-05
 PLATFORM: Replit (аккаунт @Stemessss)
 HEAD:     (после push — см. git ls-remote)
-GIT SYNC: ожидает push
+GIT SYNC: ожидает push + force reconciliation с remote
 ```
 
 ## Воркфлоу

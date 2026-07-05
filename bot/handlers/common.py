@@ -8,6 +8,7 @@ from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from bot.keyboards.announcement import build_update_menu_kb
 from bot.keyboards.main_menu import MAIN_KEYBOARD
 from bot.services.user_service import UserService
 from bot.states.nick import NickSetup
@@ -16,6 +17,56 @@ from bot.utils.text import greeting_by_hour
 
 router = Router()
 logger = logging.getLogger(__name__)
+
+# Карточка, показываемая по deep-link /start update — единственное сообщение,
+# без стандартного приветствия.
+_UPDATE_LANDING_TEXT = (
+    "🚀 <b>AstrumManager обновлён!</b>\n"
+    "\n"
+    "Добро пожаловать!\n"
+    "\n"
+    "Мы продолжаем активно развивать нашего кланового помощника. Уже сейчас "
+    "бот получил множество улучшений, исправлений и новых возможностей, а "
+    "впереди — ещё больше полезных функций.\n"
+    "\n"
+    "━━━━━━━━━━━━━━━━━━\n"
+    "\n"
+    "📌 <b>Что нужно сделать каждому участнику?</b>\n"
+    "\n"
+    "1️⃣ Откройте раздел «👤 Мой профиль».\n"
+    "\n"
+    "2️⃣ Проверьте свой игровой ник.\n"
+    "\n"
+    "3️⃣ Если ник отсутствует или указан неверно — обязательно измените его.\n"
+    "\n"
+    "⚠️ <b>Важно!</b>\n"
+    "\n"
+    "Игровой ник в боте должен ПОЛНОСТЬЮ совпадать с вашим игровым ником.\n"
+    "\n"
+    "Это необходимо для корректной работы:\n"
+    "\n"
+    "• 👥 списка участников;\n"
+    "• 📊 статистики активности;\n"
+    "• 🏆 рейтингов;\n"
+    "• ⚙️ будущих функций AstrumManager.\n"
+    "\n"
+    "━━━━━━━━━━━━━━━━━━\n"
+    "\n"
+    "💡 Если вы обнаружили:\n"
+    "\n"
+    "• 🐞 ошибку;\n"
+    "• ⚠️ недоработку;\n"
+    "• 💭 интересную идею;\n"
+    "• ✨ предложение по новой функции —\n"
+    "\n"
+    "обязательно сообщите об этом через раздел «💡 Жалобы и предложения».\n"
+    "\n"
+    "Каждое обращение обязательно будет рассмотрено администрацией.\n"
+    "\n"
+    "Лучшие предложения будут реализованы в следующих обновлениях.\n"
+    "\n"
+    "❤️ Спасибо каждому участнику Astrum за помощь в развитии проекта!"
+)
 
 _MSK = timezone(timedelta(hours=3))
 
@@ -59,7 +110,7 @@ async def handle_start(
     command: CommandObject,
 ) -> None:
     """
-    Обрабатывает /start и deep-link /start join.
+    Обрабатывает /start и deep-link /start join / /start update.
 
     Новый пользователь:
       → запуск мастера первичной настройки профиля (NickSetup).
@@ -75,10 +126,18 @@ async def handle_start(
 
     await state.clear()
 
-    args = (command.args or "").strip().lower()
-    deep_join   = args == "join"
-    deep_update = args == "update"
+    deep_join = (command.args or "").strip().lower() == "join"
+    deep_update = (command.args or "").strip().lower() == "update"
     user, is_new = await user_service.register_if_new(message.from_user)
+
+    # ── Переход по deep-link «update» → карточка обновления (одно сообщение) ─
+    if deep_update:
+        logger.info(
+            "Участник %s перешёл по deep-link update — показ карточки обновления",
+            user.telegram_id,
+        )
+        await message.answer(_UPDATE_LANDING_TEXT, reply_markup=build_update_menu_kb())
+        return
 
     # ── Новый пользователь → приветствие, затем мастер первичной настройки ──
     if is_new:
@@ -89,29 +148,6 @@ async def handle_start(
         await message.answer(_WELCOME_INTRO)
         await state.set_state(NickSetup.waiting_name)
         await message.answer(_SETUP_WELCOME)
-        return
-
-    # ── Deep-link «update» — обновление профиля ──────────────────────────────
-    if deep_update:
-        logger.info(
-            "Участник %s перешёл по deep-link update — профиль обновлён",
-            user.telegram_id,
-        )
-        if not user.game_nick:
-            await message.answer(
-                "⚜️ <b>AstrumManager обновлён!</b>\n\n"
-                "Данные профиля синхронизированы.\n\n"
-                "🎮 Для завершения настройки укажите <b>игровое имя</b>:"
-            )
-            await state.set_state(NickSetup.waiting_name)
-            await message.answer(_SETUP_RETURN)
-            return
-        await message.answer(
-            "✅ <b>Добро пожаловать!</b>\n\n"
-            "AstrumManager успешно обновлён до последней версии.\n\n"
-            "Все новые функции уже доступны.",
-            reply_markup=MAIN_KEYBOARD,
-        )
         return
 
     # ── Переход по deep-link «join» → мастер первичной настройки ─────────────

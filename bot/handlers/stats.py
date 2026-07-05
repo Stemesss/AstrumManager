@@ -147,10 +147,7 @@ def _fmt_growth(g: ClanGrowth) -> str:
 async def _check_access(
     callback: CallbackQuery, user_service: UserService
 ) -> bool:
-    role = await user_service.get_role(callback.from_user.id)
-    if role not in UserRole.admin_roles():
-        await callback.answer("🔒 Недостаточно прав.", show_alert=True)
-        return False
+    """Просмотр центра статистики открыт всем зарегистрированным участникам."""
     return True
 
 
@@ -161,14 +158,6 @@ async def _check_access(
 @router.message(F.text == BTN.STATS)
 async def handle_stats_menu(message: Message, user_service: UserService) -> None:
     if not message.from_user:
-        return
-    role = await user_service.get_role(message.from_user.id)
-    if role not in UserRole.admin_roles():
-        await message.answer(
-            "🔒 <b>Доступ запрещён</b>\n\n"
-            "Раздел «Центр статистики» доступен только администраторам клана.\n"
-            f"Ваша роль: {role_label(role)}"
-        )
         return
     await message.answer(_MENU_TEXT, reply_markup=STATS_MENU_KB)
 

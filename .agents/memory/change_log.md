@@ -5,6 +5,33 @@ description: Журнал изменений — обновляется посл
 
 # Журнал изменений
 
+## [1.3.3] — 2026-07-05 — Аудит и восстановление: слияние с remote GitHub
+
+### Что было обнаружено
+- origin/main на GitHub опережал локальную ветку на 6 коммитов
+- Remote содержал систему announcements (отсутствовала локально)
+- Новые файлы: bot/handlers/announce_test.py, bot/keyboards/announcement.py, bot/services/announcements.py
+- Изменённые: common.py, menu.py, stats.py, main.py, app.ts, telegram.ts, index.ts
+
+### Что восстановлено (через GitHub API)
+- `bot/services/announcements.py` — новый: сервис send_update_announcement
+- `bot/keyboards/announcement.py` — новый: build_update_announcement_kb + build_update_menu_kb
+- `bot/handlers/announce_test.py` — новый: /testannounce (суперадмин)
+- `bot/handlers/common.py` — улучшен: _UPDATE_LANDING_TEXT + build_update_menu_kb() для deep_update
+- `bot/handlers/menu.py` — добавлен: cb_profile (inline callback для карточки обновления)
+- `bot/handlers/stats.py` — изменён: _check_access → return True (статистика всем участникам)
+- `main.py` — добавлен: announce_test.router; WEBHOOK_PATH = "/tg/webhook"
+- `artifacts/api-server/src/routes/telegram.ts` — изменён: /telegram → /tg
+- `artifacts/api-server/src/routes/index.ts` — убран: telegramRouter (теперь в app.ts)
+- `artifacts/api-server/src/app.ts` — добавлен: telegramRouter; path check /tg
+
+### Результат
+- py_compile: 7 файлов OK
+- Telegram Bot RUNNING, webhook: /tg/webhook
+- API Server RUNNING (порт 8080, перестроен с новым кодом)
+
+---
+
 ## [1.3.2p3] — 2026-07-04 — Задание №16: Deep-link «update»
 
 ### Изменено (1 файл)
